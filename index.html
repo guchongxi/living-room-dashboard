@@ -280,159 +280,155 @@
 </div>
 
 <script>
-let LAT = 30.29;
-let LNG = 120.16;
+(function() {
+  'use strict';
 
-const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+  let LAT = 30.29;
+  let LNG = 120.16;
 
-// Weather code to emoji + description
-function weatherInfo(code) {
-  const map = {
-    0:  { icon: '☀️', desc: '晴' },
-    1:  { icon: '🌤️', desc: '大部晴朗' },
-    2:  { icon: '⛅', desc: '多云' },
-    3:  { icon: '☁️', desc: '阴天' },
-    45: { icon: '🌫️', desc: '雾' },
-    48: { icon: '🌫️', desc: '雾凇' },
-    51: { icon: '🌦️', desc: '小毛毛雨' },
-    53: { icon: '🌦️', desc: '毛毛雨' },
-    55: { icon: '🌦️', desc: '大毛毛雨' },
-    56: { icon: '🌧️', desc: '冻毛毛雨' },
-    57: { icon: '🌧️', desc: '冻雨' },
-    61: { icon: '🌧️', desc: '小雨' },
-    63: { icon: '🌧️', desc: '中雨' },
-    65: { icon: '🌧️', desc: '大雨' },
-    66: { icon: '🌧️', desc: '冻雨' },
-    67: { icon: '🌧️', desc: '大冻雨' },
-    71: { icon: '🌨️', desc: '小雪' },
-    73: { icon: '🌨️', desc: '中雪' },
-    75: { icon: '❄️', desc: '大雪' },
-    77: { icon: '🌨️', desc: '雪粒' },
-    80: { icon: '🌦️', desc: '阵雨' },
-    81: { icon: '🌧️', desc: '中阵雨' },
-    82: { icon: '⛈️', desc: '大阵雨' },
-    85: { icon: '🌨️', desc: '阵雪' },
-    86: { icon: '❄️', desc: '大阵雪' },
-    95: { icon: '⛈️', desc: '雷暴' },
-    96: { icon: '⛈️', desc: '雷暴冰雹' },
-    99: { icon: '⛈️', desc: '强雷暴冰雹' },
+  const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+  const FORECAST_DAY_NAMES = ['今天', '明天', '后天'];
+  const WEATHER_MAP = {
+    0:  ['☀️', '晴'],       1:  ['🌤️', '大部晴朗'],  2:  ['⛅', '多云'],
+    3:  ['☁️', '阴天'],     45: ['🌫️', '雾'],         48: ['🌫️', '雾凇'],
+    51: ['🌦️', '小毛毛雨'], 53: ['🌦️', '毛毛雨'],     55: ['🌦️', '大毛毛雨'],
+    56: ['🌧️', '冻毛毛雨'], 57: ['🌧️', '冻雨'],       61: ['🌧️', '小雨'],
+    63: ['🌧️', '中雨'],     65: ['🌧️', '大雨'],       66: ['🌧️', '冻雨'],
+    67: ['🌧️', '大冻雨'],   71: ['🌨️', '小雪'],       73: ['🌨️', '中雪'],
+    75: ['❄️', '大雪'],     77: ['🌨️', '雪粒'],       80: ['🌦️', '阵雨'],
+    81: ['🌧️', '中阵雨'],   82: ['⛈️', '大阵雨'],     85: ['🌨️', '阵雪'],
+    86: ['❄️', '大阵雪'],   95: ['⛈️', '雷暴'],       96: ['⛈️', '雷暴冰雹'],
+    99: ['⛈️', '强雷暴冰雹'],
   };
-  return map[code] || { icon: '🌡️', desc: '未知' };
-}
 
-function getGreeting(hour) {
-  if (hour < 6) return '夜深了，早点休息';
-  if (hour < 9) return '早安';
-  if (hour < 12) return '上午好';
-  if (hour < 14) return '中午好';
-  if (hour < 18) return '下午好';
-  if (hour < 22) return '晚上好';
-  return '夜深了，早点休息';
-}
+  // 缓存 DOM 引用
+  const $time = document.getElementById('time');
+  const $weekday = document.getElementById('weekday');
+  const $fullDate = document.getElementById('fullDate');
+  const $greeting = document.getElementById('greeting');
+  const $weatherIcon = document.getElementById('weatherIcon');
+  const $weatherTemp = document.getElementById('weatherTemp');
+  const $weatherDesc = document.getElementById('weatherDesc');
+  const $weatherDetails = document.getElementById('weatherDetails');
+  const $forecast = document.getElementById('forecast');
 
-function isDayTime(hour) {
-  return hour >= 6 && hour < 18;
-}
+  // 记录上次更新的日期相关值，避免无变化时重复写 DOM
+  let lastDateStr = '';
+  let lastGreeting = '';
 
-function updateClock() {
-  const now = new Date();
-  const h = String(now.getHours()).padStart(2, '0');
-  const m = String(now.getMinutes()).padStart(2, '0');
-  const s = String(now.getSeconds()).padStart(2, '0');
-
-  document.getElementById('time').innerHTML = `${h}:${m}<span class="seconds">${s}</span>`;
-  document.getElementById('weekday').textContent = WEEKDAYS[now.getDay()];
-
-  const y = now.getFullYear();
-  const mo = now.getMonth() + 1;
-  const d = now.getDate();
-  document.getElementById('fullDate').textContent = `${y}年${mo}月${d}日`;
-
-  // 始终使用暗色主题
-  document.body.className = 'loading';
-
-  document.getElementById('greeting').textContent = getGreeting(now.getHours());
-}
-
-async function fetchWeather() {
-  try {
-    const resp = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LNG}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5`
-    );
-    const data = await resp.json();
-
-    // Current weather
-    const current = data.current;
-    const info = weatherInfo(current.weather_code);
-
-    document.getElementById('weatherIcon').textContent = info.icon;
-    document.getElementById('weatherTemp').textContent = `${Math.round(current.temperature_2m)}°`;
-    document.getElementById('weatherDesc').textContent = info.desc;
-
-    const feelsLike = Math.round(current.apparent_temperature);
-    const humidity = current.relative_humidity_2m;
-    const wind = Math.round(current.wind_speed_10m);
-    document.getElementById('weatherDetails').innerHTML =
-      `<span>体感 ${feelsLike}°</span>` +
-      `<span>湿度 ${humidity}%</span>` +
-      `<span>风速 ${wind} km/h</span>`;
-
-    // Forecast
-    const daily = data.daily;
-    const forecastEl = document.getElementById('forecast');
-    forecastEl.innerHTML = '';
-
-    const dayNames = ['今天', '明天', '后天'];
-
-    for (let i = 1; i < Math.min(4, daily.time.length); i++) {
-      const fInfo = weatherInfo(daily.weather_code[i]);
-      const date = new Date(daily.time[i]);
-      const dayName = i < 3 ? dayNames[i] : WEEKDAYS[date.getDay()];
-
-      forecastEl.innerHTML += `
-        <div class="forecast-item">
-          <div class="forecast-day">${dayName}</div>
-          <div class="forecast-icon">${fInfo.icon}</div>
-          <div class="forecast-temp">${Math.round(daily.temperature_2m_max[i])}° / ${Math.round(daily.temperature_2m_min[i])}°</div>
-        </div>
-      `;
-    }
-  } catch (e) {
-    console.error('Weather fetch failed:', e);
-    document.getElementById('weatherDesc').textContent = '天气加载失败';
-    document.getElementById('weatherIcon').textContent = '⚠️';
-    document.getElementById('weatherTemp').textContent = '--°';
-  }
-}
-
-// Geolocation
-function getGeoLocation() {
-  return new Promise((resolve) => {
-    if (!navigator.geolocation) {
-      resolve(null);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => resolve(null),
-      { timeout: 5000 }
-    );
-  });
-}
-
-// Init
-(async function init() {
-  updateClock();
-  setInterval(updateClock, 1000);
-
-  const geo = await getGeoLocation();
-  if (geo) {
-    LAT = geo.lat;
-    LNG = geo.lng;
+  // 问候语：按小时分段
+  function getGreeting(hour) {
+    if (hour < 6)  return '夜深了，早点休息';
+    if (hour < 9)  return '早安';
+    if (hour < 12) return '上午好';
+    if (hour < 14) return '中午好';
+    if (hour < 18) return '下午好';
+    if (hour < 22) return '晚上好';
+    return '夜深了，早点休息';
   }
 
-  fetchWeather();
-  setInterval(fetchWeather, 600000); // Refresh weather every 10 min
+  // 对齐到下一秒整点，消除 setInterval 漂移
+  function scheduleClock() {
+    const now = Date.now();
+    const ms = now % 1000;
+    const delay = ms === 0 ? 1000 : 1000 - ms;
+    setTimeout(function() {
+      updateClock();
+      scheduleClock();
+    }, delay);
+  }
+
+  function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const s = String(now.getSeconds()).padStart(2, '0');
+
+    // 时间每秒必变，直接更新
+    $time.innerHTML = h + ':' + m + '<span class="seconds">' + s + '</span>';
+
+    // 日期/星期/问候语：只在变化时更新
+    const day = now.getDay();
+    const dateStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日' + day;
+    if (dateStr !== lastDateStr) {
+      lastDateStr = dateStr;
+      $weekday.textContent = WEEKDAYS[day];
+      $fullDate.textContent = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日';
+    }
+
+    const greeting = getGreeting(now.getHours());
+    if (greeting !== lastGreeting) {
+      lastGreeting = greeting;
+      $greeting.textContent = greeting;
+    }
+  }
+
+  async function fetchWeather() {
+    try {
+      const resp = await fetch(
+        'https://api.open-meteo.com/v1/forecast?latitude=' + LAT +
+        '&longitude=' + LNG +
+        '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m' +
+        '&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5'
+      );
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+
+      var current = data.current;
+      var w = WEATHER_MAP[current.weather_code] || ['🌡️', '未知'];
+
+      $weatherIcon.textContent = w[0];
+      $weatherTemp.textContent = Math.round(current.temperature_2m) + '°';
+      $weatherDesc.textContent = w[1];
+      $weatherDetails.innerHTML =
+        '<span>体感 ' + Math.round(current.apparent_temperature) + '°</span>' +
+        '<span>湿度 ' + current.relative_humidity_2m + '%</span>' +
+        '<span>风速 ' + Math.round(current.wind_speed_10m) + ' km/h</span>';
+
+      // 预报：拼接字符串一次性写入，避免循环内 innerHTML +=
+      var daily = data.daily;
+      var count = Math.min(4, daily.time.length);
+      var html = '';
+      for (var i = 1; i < count; i++) {
+        var fi = WEATHER_MAP[daily.weather_code[i]] || ['🌡️', '未知'];
+        var dayName = i < 3 ? FORECAST_DAY_NAMES[i] : WEEKDAYS[new Date(daily.time[i]).getDay()];
+        html += '<div class="forecast-item"><div class="forecast-day">' + dayName +
+          '</div><div class="forecast-icon">' + fi[0] +
+          '</div><div class="forecast-temp">' + Math.round(daily.temperature_2m_max[i]) +
+          '° / ' + Math.round(daily.temperature_2m_min[i]) + '°</div></div>';
+      }
+      $forecast.innerHTML = html;
+    } catch (e) {
+      console.error('Weather fetch failed:', e);
+      $weatherDesc.textContent = '天气加载失败';
+      $weatherIcon.textContent = '⚠️';
+      $weatherTemp.textContent = '--°';
+    }
+  }
+
+  // Geolocation
+  function getGeoLocation() {
+    return new Promise(function(resolve) {
+      if (!navigator.geolocation) { resolve(null); return; }
+      navigator.geolocation.getCurrentPosition(
+        function(pos) { resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }); },
+        function() { resolve(null); },
+        { timeout: 5000 }
+      );
+    });
+  }
+
+  // 启动
+  (async function init() {
+    updateClock();
+    scheduleClock();
+
+    var geo = await getGeoLocation();
+    if (geo) { LAT = geo.lat; LNG = geo.lng; }
+
+    fetchWeather();
+    setInterval(fetchWeather, 600000);
+  })();
 })();
 </script>
 
