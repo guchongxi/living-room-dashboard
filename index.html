@@ -38,7 +38,21 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /* 主容器 — 使用旧版 Flexbox + safe area */
+  /* 2048×1536 逻辑画布，由脚本按视口等比缩放居中 */
+  .stage {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: 2048px;
+    height: 1536px;
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+    -webkit-transform-origin: center center;
+    transform-origin: center center;
+    overflow: visible;
+  }
+
+  /* 主容器 — 左右顶满画布，仅保留安全区 inset */
   .container {
     width: 100%;
     height: 100%;
@@ -49,31 +63,148 @@
     -webkit-box-direction: normal;
     -webkit-flex-direction: column;
     flex-direction: column;
-    padding: 20px 40px;
-    padding-top: calc(20px + env(safe-area-inset-top));
-    padding-bottom: calc(20px + env(safe-area-inset-bottom));
-    padding-left: calc(40px + env(safe-area-inset-left));
-    padding-right: calc(40px + env(safe-area-inset-right));
+    padding: 18px 0;
+    padding-top: calc(18px + env(safe-area-inset-top));
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+    /* 无 safe-area 时顶到画布边；有刘海/圆角时再加 inset */
+    padding-left: 0;
+    padding-right: 0;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
 
-  /* 上半区：时钟 */
+  /* 日期时间：静态标签低调，动态数字更亮 */
+  .date-static,
+  .time-sep {
+    color: #9a9590;
+    opacity: 0.85;
+    font-weight: 400;
+  }
+
+  .date-dynamic,
+  .time .time-part {
+    color: #ffffff;
+    opacity: 1;
+    font-weight: 700;
+  }
+
+  .time .seconds.date-dynamic {
+    font-weight: 600;
+    opacity: 0.92;
+  }
+
+  /* 上 2/3：时间 + 猫 + 猫语；上下弹性占位约 3:1；translateY 仅下移绘制，不占新布局空间，与底栏重叠 */
   .top-panel {
-    -webkit-box-flex: 1;
-    -webkit-flex: 1;
-    flex: 1;
+    position: relative;
+    -webkit-box-flex: 2;
+    -webkit-flex: 2 1 0%;
+    flex: 2 1 0%;
+    min-height: 0;
     display: -webkit-box;
     display: -webkit-flex;
     display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    -webkit-box-align: stretch;
+    -webkit-align-items: stretch;
+    align-items: stretch;
+    -webkit-box-pack: start;
+    -webkit-justify-content: flex-start;
+    justify-content: flex-start;
+    padding-top: 32px;
+    padding-bottom: 24px;
+    z-index: 5;
+    overflow: visible;
+    -webkit-transform: translateY(150px);
+    transform: translateY(150px);
+  }
+
+  .top-panel-spacer--top {
+    -webkit-box-flex: 3;
+    -webkit-flex: 3 1 0%;
+    flex: 3 1 0%;
+    min-height: 0;
+  }
+
+  .top-panel-spacer--bottom {
+    -webkit-box-flex: 1;
+    -webkit-flex: 1 1 0%;
+    flex: 1 1 0%;
+    min-height: 0;
+  }
+
+  .top-panel-stack {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -webkit-flex-direction: column;
+    flex-direction: column;
     -webkit-box-align: center;
     -webkit-align-items: center;
     align-items: center;
-    -webkit-box-pack: center;
-    -webkit-justify-content: center;
-    justify-content: center;
-    z-index: 1;
+    -webkit-box-pack: start;
+    -webkit-justify-content: flex-start;
+    justify-content: flex-start;
+    -webkit-box-flex: 0;
+    -webkit-flex: 0 0 auto;
+    flex: 0 0 auto;
+    min-height: 0;
+    width: 100%;
   }
 
-  /* 下半区：日期 + 天气 — iOS 10 不支持 gap，用 margin 代替 */
+  /* 猫与「猫语」紧跟在时钟下方（仍在上方区域内） */
+  .pet-cat-block {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    width: 100%;
+    -webkit-flex: 0 0 auto;
+    flex: 0 0 auto;
+    margin: 0 auto;
+  }
+
+  /* 猫 */
+  .pet-cat-wrap {
+    position: relative;
+    pointer-events: none;
+    z-index: 1;
+    margin-top: 24px;
+    -webkit-flex: 0 0 auto;
+    flex: 0 0 auto;
+  }
+
+  .pet-cat-inner {
+    /* 走动时仅用 translate3d 偏移，避免触发布局 */
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+  }
+
+  .pet-cat-art {
+    margin: 0;
+    font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+    font-size: 92px;
+    font-weight: 400;
+    line-height: 1.15;
+    white-space: pre;
+    text-align: center;
+    color: #ece8e2;
+    opacity: 0.55;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* 下 1/3：左日期 | 右天气 */
   .bottom-panel {
     display: -webkit-box;
     display: -webkit-flex;
@@ -84,14 +215,21 @@
     -webkit-box-pack: justify;
     -webkit-justify-content: space-between;
     justify-content: space-between;
+    -webkit-box-flex: 1;
+    -webkit-flex: 1 1 0%;
+    flex: 1 1 0%;
+    min-height: 0;
     z-index: 1;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Ambient glow */
   .ambient {
     position: fixed;
-    width: 600px;
-    height: 600px;
+    width: 900px;
+    height: 900px;
     border-radius: 50%;
     -webkit-filter: blur(120px);
     filter: blur(120px);
@@ -100,54 +238,73 @@
     background: #6c8cff;
   }
 
-  /* Time */
+  /* Time — 画布坐标 px */
   .time-section {
+    width: 100%;
     text-align: center;
     position: relative;
     z-index: 1;
+    -webkit-flex: 0 0 auto;
+    flex: 0 0 auto;
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
   }
 
-  /* clamp() iOS 10 不支持，用 vw 做回退 */
   .time {
-    font-size: 28vw;
-    font-size: clamp(160px, 28vw, 400px);
+    font-size: 620px;
     font-weight: 700;
-    letter-spacing: -6px;
-    line-height: 0.9;
+    letter-spacing: -30px;
+    line-height: 0.82;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
-  .seconds {
-    font-size: 10vw;
-    font-size: clamp(60px, 10vw, 140px);
+  .time .time-sep {
+    letter-spacing: 0;
+    margin: 0 2px;
+    font-size: 580px;
     font-weight: 600;
-    vertical-align: baseline;
+    vertical-align: 0.04em;
+  }
+
+  .time .seconds {
+    font-size: 208px;
+    font-weight: 600;
+    vertical-align: 0.34em;
     margin-left: 8px;
-    opacity: 0.6;
+    letter-spacing: -8px;
   }
 
   .date-section {
     text-align: left;
     position: relative;
     z-index: 1;
-    margin-right: 40px;
+    margin-right: 24px;
+    -webkit-box-flex: 1;
+    -webkit-flex: 1 1 auto;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .weekday {
-    font-size: 72px;
-    font-size: clamp(20px, 3vw, 32px);
+    font-size: 84px;
     font-weight: 600;
-    letter-spacing: 6px;
-    text-transform: uppercase;
-    margin-bottom: 4px;
+    letter-spacing: 12px;
+    margin-bottom: 14px;
   }
 
   .full-date {
-    font-size: 56px;
-    font-size: clamp(16px, 2.2vw, 24px);
+    font-size: 60px;
     font-weight: 300;
-    opacity: 0.7;
     white-space: nowrap;
+  }
+
+  .full-date .date-static {
+    font-weight: 300;
+  }
+
+  .full-date .date-dynamic {
+    font-weight: 600;
   }
 
   /* Divider */
@@ -170,8 +327,11 @@
     -webkit-box-align: end;
     -webkit-align-items: flex-end;
     align-items: flex-end;
+    -webkit-flex: 0 0 auto;
+    flex: 0 0 auto;
     position: relative;
     z-index: 1;
+    margin-left: 0;
   }
 
   .weather-main {
@@ -184,25 +344,22 @@
   }
 
   .weather-icon {
-    margin-right: 12px;
-    font-size: 48px;
-    font-size: clamp(36px, 5vh, 56px);
+    margin-right: 16px;
+    font-size: 132px;
     line-height: 1;
   }
 
   .weather-temp {
-    font-size: 112px;
-    font-size: clamp(28px, 4vh, 48px);
+    font-size: 168px;
     font-weight: 300;
-    letter-spacing: -2px;
+    letter-spacing: -6px;
   }
 
   .weather-desc {
-    margin-top: 4px;
-    font-size: 18px;
-    font-size: clamp(14px, 1.8vh, 20px);
+    margin-top: 12px;
+    font-size: 44px;
     font-weight: 400;
-    opacity: 0.7;
+    opacity: 0.75;
   }
 
   .weather-details {
@@ -212,10 +369,9 @@
     -webkit-box-align: center;
     -webkit-align-items: center;
     align-items: center;
-    margin-top: 8px;
-    font-size: 24px;
-    font-size: clamp(12px, 1.4vh, 15px);
-    opacity: 0.8;
+    margin-top: 16px;
+    font-size: 34px;
+    opacity: 0.82;
     font-weight: 300;
   }
 
@@ -229,7 +385,7 @@
   }
 
   .weather-details span + span {
-    margin-left: 20px;
+    margin-left: 28px;
   }
 
   /* Forecast row */
@@ -240,7 +396,7 @@
     -webkit-box-align: center;
     -webkit-align-items: center;
     align-items: center;
-    margin-top: 8px;
+    margin-top: 18px;
     position: relative;
     z-index: 1;
   }
@@ -252,29 +408,29 @@
     -webkit-box-align: center;
     -webkit-align-items: center;
     align-items: center;
-    padding: 8px 12px;
-    border-radius: 12px;
+    padding: 16px 22px;
+    border-radius: 16px;
     background: rgba(255,255,255,0.15);
   }
 
   .forecast-item + .forecast-item {
-    margin-left: 12px;
+    margin-left: 18px;
   }
 
   .forecast-day {
-    font-size: 15px;
-    opacity: 0.6;
+    font-size: 34px;
+    opacity: 0.65;
     font-weight: 400;
   }
 
   .forecast-icon {
-    margin: 0 6px;
-    font-size: 26px;
+    margin: 0 12px;
+    font-size: 54px;
     line-height: 1;
   }
 
   .forecast-temp {
-    font-size: 18px;
+    font-size: 38px;
     font-weight: 300;
     font-variant-numeric: tabular-nums;
   }
@@ -293,19 +449,95 @@
     to { opacity: 1; }
   }
 
-  /* Greeting */
+  /* 气泡：指向猫猫，像说过的话 */
+  .cat-speech {
+    position: relative;
+    margin-top: 36px;
+    padding: 22px 36px 32px;
+    width: 92%;
+    max-width: 960px;
+    text-align: center;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 24px;
+    pointer-events: none;
+    margin-bottom: 8px;
+  }
+
+  .cat-speech::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    margin-left: -11px;
+    border-left: 11px solid transparent;
+    border-right: 11px solid transparent;
+    border-bottom: 12px solid rgba(255,255,255,0.08);
+  }
+
+  /* Greeting：默认静止；小猫动作时加 cat-speech--wave，逐字单次起伏连成一波从左到右 */
   .greeting {
-    font-size: 16px;
-    font-size: clamp(13px, 1.4vh, 17px);
-    font-weight: 300;
-    opacity: 0.5;
-    letter-spacing: 2px;
+    font-size: 34px;
+    font-weight: 400;
+    opacity: 0.9;
+    letter-spacing: 3px;
+    line-height: 1.55;
+    color: #ece8e2;
+    margin: 0;
+    padding: 0 4px 4px;
     z-index: 1;
+    display: -webkit-inline-box;
+    display: -webkit-inline-flex;
+    display: inline-flex;
+    -webkit-box-orient: horizontal;
+    -webkit-box-direction: normal;
+    -webkit-flex-direction: row;
+    flex-direction: row;
+    -webkit-flex-wrap: wrap;
+    flex-wrap: wrap;
+    -webkit-box-pack: center;
+    -webkit-justify-content: center;
+    justify-content: center;
+    -webkit-box-align: baseline;
+    -webkit-align-items: baseline;
+    align-items: baseline;
+    max-width: 100%;
+  }
+
+  .greeting-char {
+    display: inline-block;
+    -webkit-animation: none;
+    animation: none;
+  }
+
+  .cat-speech.cat-speech--wave .greeting-char {
+    -webkit-animation: greetingWaveOnce 0.55s ease-in-out 1 both;
+    animation: greetingWaveOnce 0.55s ease-in-out 1 both;
+    -webkit-animation-delay: calc(var(--i, 0) * 0.05s);
+    animation-delay: calc(var(--i, 0) * 0.05s);
+  }
+
+  @-webkit-keyframes greetingWaveOnce {
+    0%, 100% { -webkit-transform: translateY(0); transform: translateY(0); }
+    50% { -webkit-transform: translateY(-5px); transform: translateY(-5px); }
+  }
+  @keyframes greetingWaveOnce {
+    0%, 100% { -webkit-transform: translateY(0); transform: translateY(0); }
+    50% { -webkit-transform: translateY(-5px); transform: translateY(-5px); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cat-speech.cat-speech--wave .greeting-char {
+      -webkit-animation: none;
+      animation: none;
+    }
   }
 
   /* Error state */
   .weather-error {
-    font-size: 16px;
+    font-size: 32px;
     opacity: 0.7;
     font-weight: 300;
   }
@@ -316,18 +548,38 @@
 <div class="ambient" style="top: -200px; left: -200px;"></div>
 <div class="ambient" style="bottom: -200px; right: -200px;"></div>
 
+<div class="stage" id="stage">
 <div class="container">
   <div class="top-panel">
-    <div class="time-section">
-      <div class="time" id="time">--:--<span class="seconds" id="seconds">00</span></div>
+    <div class="top-panel-spacer top-panel-spacer--top" aria-hidden="true"></div>
+    <div class="top-panel-stack">
+      <div class="time-section">
+        <div class="time" id="time">
+          <span class="time-part date-dynamic" id="timeH">--</span><span class="time-sep date-static">:</span><span class="time-part date-dynamic" id="timeM">--</span><span class="seconds date-dynamic" id="timeS">00</span>
+        </div>
+      </div>
+      <div class="pet-cat-block">
+        <div class="pet-cat-wrap" id="petCatLayer" aria-hidden="true">
+          <div class="pet-cat-inner" id="petCatInner">
+            <pre class="pet-cat-art" id="petCatArt"></pre>
+          </div>
+        </div>
+        <div class="cat-speech" aria-live="polite">
+          <div class="greeting" id="greeting"></div>
+        </div>
+      </div>
     </div>
+    <div class="top-panel-spacer top-panel-spacer--bottom" aria-hidden="true"></div>
   </div>
 
   <div class="bottom-panel">
     <div class="date-section">
-      <div class="weekday" id="weekday">------</div>
-      <div class="full-date" id="fullDate">----年--月--日</div>
-      <div class="greeting" id="greeting"></div>
+      <div class="weekday" id="weekdayRow">
+        <span class="date-static">星期</span><span class="date-dynamic" id="weekdayHanzi">日</span>
+      </div>
+      <div class="full-date" id="fullDate">
+        <span class="date-dynamic" id="dateYear">----</span><span class="date-static">年</span><span class="date-dynamic" id="dateMonth">--</span><span class="date-static">月</span><span class="date-dynamic" id="dateDay">--</span><span class="date-static">日</span>
+      </div>
     </div>
     <div class="weather-section" id="weatherSection">
       <div class="weather-main">
@@ -340,6 +592,7 @@
     </div>
   </div>
 </div>
+</div>
 
 <script>
 (function() {
@@ -349,6 +602,7 @@
   var LNG = 120.16;
 
   var WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+  var WEEKDAY_HANZI = ['日', '一', '二', '三', '四', '五', '六'];
   var FORECAST_DAY_NAMES = ['今天', '明天', '后天'];
   var WEATHER_MAP = {
     0:  ['☀️', '晴'],       1:  ['🌤️', '大部晴朗'],  2:  ['⛅', '多云'],
@@ -363,9 +617,13 @@
     99: ['⛈️', '强雷暴冰雹'],
   };
 
-  var $time = document.getElementById('time');
-  var $weekday = document.getElementById('weekday');
-  var $fullDate = document.getElementById('fullDate');
+  var $timeH = document.getElementById('timeH');
+  var $timeM = document.getElementById('timeM');
+  var $timeS = document.getElementById('timeS');
+  var $weekdayHanzi = document.getElementById('weekdayHanzi');
+  var $dateYear = document.getElementById('dateYear');
+  var $dateMonth = document.getElementById('dateMonth');
+  var $dateDay = document.getElementById('dateDay');
   var $greeting = document.getElementById('greeting');
   var $weatherIcon = document.getElementById('weatherIcon');
   var $weatherTemp = document.getElementById('weatherTemp');
@@ -375,6 +633,29 @@
 
   var lastDateStr = '';
   var lastGreeting = '';
+  var lastSecTick = null;
+  var greetingCharCount = 0;
+
+  function prefersReducedMotion() {
+    try {
+      return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  var $stage = document.getElementById('stage');
+
+  function updateStageScale() {
+    if (!$stage) return;
+    var w = window.innerWidth || document.documentElement.clientWidth || 0;
+    var h = window.innerHeight || document.documentElement.clientHeight || 0;
+    var sc = Math.min(w / 2048, h / 1536);
+    if (sc <= 0 || !isFinite(sc)) sc = 1;
+    var t = 'translate(-50%, -50%) scale(' + sc + ')';
+    $stage.style.webkitTransform = t;
+    $stage.style.transform = t;
+  }
 
   function getGreeting(hour) {
     if (hour < 6)  return '夜深了，早点休息';
@@ -384,6 +665,28 @@
     if (hour < 18) return '下午好';
     if (hour < 22) return '晚上好';
     return '夜深了，早点休息';
+  }
+
+  function renderGreetingText(text) {
+    if (!$greeting) return;
+    $greeting.setAttribute('aria-label', text);
+    if (prefersReducedMotion()) {
+      greetingCharCount = 0;
+      $greeting.textContent = text;
+      return;
+    }
+    greetingCharCount = text.length;
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      var span = document.createElement('span');
+      span.className = 'greeting-char';
+      span.style.setProperty('--i', String(i));
+      span.textContent = ch === ' ' ? '\u00a0' : ch;
+      frag.appendChild(span);
+    }
+    $greeting.textContent = '';
+    $greeting.appendChild(frag);
   }
 
   function scheduleClock() {
@@ -402,20 +705,34 @@
     var m = String(now.getMinutes()).padStart(2, '0');
     var s = String(now.getSeconds()).padStart(2, '0');
 
-    $time.innerHTML = h + ':' + m + '<span class="seconds">' + s + '</span>';
+    if ($timeH) $timeH.textContent = h;
+    if ($timeM) $timeM.textContent = m;
+    if ($timeS) $timeS.textContent = s;
+
+    if (lastSecTick !== s) {
+      if (lastSecTick !== null && typeof window.petCatOnSecondTick === 'function') {
+        window.petCatOnSecondTick();
+      }
+      lastSecTick = s;
+    }
 
     var day = now.getDay();
-    var dateStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日' + day;
+    var mo = now.getMonth() + 1;
+    var d = now.getDate();
+    var y = now.getFullYear();
+    var dateStr = y + '年' + mo + '月' + d + '日' + day;
     if (dateStr !== lastDateStr) {
       lastDateStr = dateStr;
-      $weekday.textContent = WEEKDAYS[day];
-      $fullDate.textContent = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日';
+      if ($weekdayHanzi) $weekdayHanzi.textContent = WEEKDAY_HANZI[day];
+      if ($dateYear) $dateYear.textContent = String(y);
+      if ($dateMonth) $dateMonth.textContent = String(mo);
+      if ($dateDay) $dateDay.textContent = String(d);
     }
 
     var greeting = getGreeting(now.getHours());
     if (greeting !== lastGreeting) {
       lastGreeting = greeting;
-      $greeting.textContent = greeting;
+      renderGreetingText(greeting);
     }
   }
 
@@ -471,9 +788,242 @@
     });
   }
 
-  // 启动
+  /* 字符猫：setTimeout 调度；隐藏不跑；与 prefers-reduced-motion 对齐 */
+  function initPetCat() {
+    var elInner = document.getElementById('petCatInner');
+    var elArt = document.getElementById('petCatArt');
+    var elSpeech = document.querySelector('.cat-speech');
+    if (!elInner || !elArt) {
+      window.petCatOnSecondTick = function() {};
+      return;
+    }
+
+    var speechWaveTimer = null;
+
+    var FRAMES = {
+      open: '   /\\_/\\   \n  ( · · )  \n   u---u   ',
+      blink: '   /\\_/\\   \n  ( - - )  \n   u---u   ',
+      walkA: '   /\\_/\\   \n  ( · · )  \n _/     \\  ',
+      walkB: '   /\\_/\\   \n  ( · · )  \n  \\     \\_ '
+    };
+
+    var timeoutId = null;
+    var nudgeTimer = null;
+    var state = 'idle';
+    var blinkPhase = 0;
+    var walkStepsLeft = 0;
+    var walkDir = 1;
+    var walkFrame = 0;
+    var offsetPx = 0;
+    var nudgeY = 0;
+
+    var reducedMotionCache = prefersReducedMotion();
+
+    function pageHidden() {
+      if (document.visibilityState === 'hidden') return true;
+      if (typeof document.hidden !== 'undefined' && document.hidden) return true;
+      return false;
+    }
+
+    function applyTransform() {
+      elInner.style.webkitTransform = 'translate3d(' + offsetPx + 'px,' + nudgeY + 'px,0)';
+      elInner.style.transform = 'translate3d(' + offsetPx + 'px,' + nudgeY + 'px,0)';
+    }
+
+    function triggerGreetingWave() {
+      if (!elSpeech || reducedMotionCache) return;
+      if (speechWaveTimer) {
+        clearTimeout(speechWaveTimer);
+        speechWaveTimer = null;
+      }
+      var n = greetingCharCount > 0 ? greetingCharCount : 12;
+      var need = (n - 1) * 50 + 550 + 100;
+      elSpeech.classList.remove('cat-speech--wave');
+      void elSpeech.offsetWidth;
+      elSpeech.classList.add('cat-speech--wave');
+      speechWaveTimer = setTimeout(function() {
+        elSpeech.classList.remove('cat-speech--wave');
+        speechWaveTimer = null;
+      }, need);
+    }
+
+    function setArt(key) {
+      var next = FRAMES[key];
+      if (elArt.textContent !== next) {
+        elArt.textContent = next;
+      }
+    }
+
+    function randInt(min, max) {
+      return min + Math.floor(Math.random() * (max - min + 1));
+    }
+
+    function clearTimer() {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    }
+
+    function schedule(delay) {
+      clearTimer();
+      timeoutId = setTimeout(tick, delay);
+    }
+
+    function tick() {
+      timeoutId = null;
+      if (pageHidden()) {
+        return;
+      }
+
+      reducedMotionCache = prefersReducedMotion();
+
+      if (reducedMotionCache) {
+        if (elArt.textContent === FRAMES.blink) {
+          setArt('open');
+          schedule(6000 + randInt(0, 4000));
+          return;
+        }
+        setArt('open');
+        offsetPx = 0;
+        applyTransform();
+        if (Math.random() < 0.22) {
+          setArt('blink');
+          schedule(160);
+          return;
+        }
+        schedule(6000 + randInt(0, 4000));
+        return;
+      }
+
+      if (state === 'idle') {
+        setArt('open');
+        var r = Math.random();
+        if (r < 0.2) {
+          state = 'blink';
+          blinkPhase = 0;
+          schedule(140);
+          return;
+        }
+        if (r < 0.33) {
+          state = 'walk';
+          walkStepsLeft = randInt(4, 7);
+          walkDir = Math.random() < 0.5 ? -1 : 1;
+          walkFrame = 0;
+          offsetPx = 0;
+          applyTransform();
+          schedule(400);
+          return;
+        }
+        schedule(randInt(1200, 2200));
+        return;
+      }
+
+      if (state === 'blink') {
+        if (blinkPhase === 0) {
+          setArt('blink');
+          triggerGreetingWave();
+          blinkPhase = 1;
+          schedule(150);
+        } else {
+          setArt('open');
+          state = 'idle';
+          schedule(randInt(800, 1600));
+        }
+        return;
+      }
+
+      if (state === 'walk') {
+        setArt(walkFrame % 2 === 0 ? 'walkA' : 'walkB');
+        walkFrame++;
+        offsetPx += walkDir * 6;
+        if (offsetPx > 20) offsetPx = 20;
+        if (offsetPx < -20) offsetPx = -20;
+        applyTransform();
+        if (walkFrame === 1) {
+          triggerGreetingWave();
+        }
+        walkStepsLeft--;
+        if (walkStepsLeft <= 0) {
+          state = 'idle';
+          offsetPx = 0;
+          applyTransform();
+          setArt('open');
+          schedule(randInt(1000, 2000));
+          return;
+        }
+        schedule(420);
+        return;
+      }
+
+      state = 'idle';
+      schedule(1500);
+    }
+
+    window.petCatOnSecondTick = function() {
+      if (pageHidden()) return;
+      if (prefersReducedMotion()) return;
+      if (state !== 'idle') return;
+      if (nudgeTimer) {
+        clearTimeout(nudgeTimer);
+        nudgeTimer = null;
+      }
+      nudgeY = -14;
+      applyTransform();
+      nudgeTimer = setTimeout(function() {
+        nudgeTimer = null;
+        nudgeY = 0;
+        applyTransform();
+      }, 130);
+    };
+
+    document.addEventListener('visibilitychange', function() {
+      clearTimer();
+      if (speechWaveTimer) {
+        clearTimeout(speechWaveTimer);
+        speechWaveTimer = null;
+      }
+      if (elSpeech) {
+        elSpeech.classList.remove('cat-speech--wave');
+      }
+      if (nudgeTimer) {
+        clearTimeout(nudgeTimer);
+        nudgeTimer = null;
+      }
+      nudgeY = 0;
+      applyTransform();
+      if (!pageHidden()) {
+        schedule(80);
+      }
+    });
+
+    if (window.matchMedia) {
+      try {
+        var mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+        var onMq = function() {
+          reducedMotionCache = prefersReducedMotion();
+          if (lastGreeting) renderGreetingText(lastGreeting);
+          clearTimer();
+          schedule(50);
+        };
+        if (mql.addEventListener) {
+          mql.addEventListener('change', onMq);
+        } else if (mql.addListener) {
+          mql.addListener(onMq);
+        }
+      } catch (e) {}
+    }
+
+    setArt('open');
+    applyTransform();
+    schedule(400);
+  }
+
+  updateStageScale();
+  window.addEventListener('resize', updateStageScale);
   updateClock();
   scheduleClock();
+  initPetCat();
 
   getGeoLocation().then(function(geo) {
     if (geo) { LAT = geo.lat; LNG = geo.lng; }
