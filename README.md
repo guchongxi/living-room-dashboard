@@ -4,6 +4,8 @@
 
 ## 预览
 
+![screenshot](screenshot.png)
+
 直接打开 `index.html` 即可在浏览器中查看。
 
 ## 功能
