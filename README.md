@@ -12,6 +12,8 @@
 
 - 实时时钟显示
 - 天气信息展示
+- 支持 iOS 10.3.3 添加到主屏幕（standalone 模式）
+- 支持 PWA manifest（iOS 16.4+ / Android Chrome）
 
 ## 使用
 

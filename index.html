@@ -2,67 +2,88 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="客厅时钟">
+<meta name="format-detection" content="telephone=no">
 <title>客厅时钟</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" href="icon-192.png">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;600;700&display=swap');
+  @font-face { font-family: 'Inter'; font-weight: 200; src: url('fonts/Inter-200.ttf') format('truetype'); }
+  @font-face { font-family: 'Inter'; font-weight: 300; src: url('fonts/Inter-300.ttf') format('truetype'); }
+  @font-face { font-family: 'Inter'; font-weight: 400; src: url('fonts/Inter-400.ttf') format('truetype'); }
+  @font-face { font-family: 'Inter'; font-weight: 600; src: url('fonts/Inter-600.ttf') format('truetype'); }
+  @font-face { font-family: 'Inter'; font-weight: 700; src: url('fonts/Inter-700.ttf') format('truetype'); }
 
-  :root {
-    --bg-day: #f5f0eb;
-    --bg-night: #0f1117;
-    --text-day: #1a1a2e;
-    --text-night: #e8e6e3;
-    --muted-day: #8a8580;
-    --muted-night: #6b6b7b;
-    --accent-day: #e07a3a;
-    --accent-night: #6c8cff;
-    --card-day: rgba(255,255,255,0.6);
-    --card-night: rgba(255,255,255,0.06);
-    --border-day: rgba(0,0,0,0.06);
-    --border-night: rgba(255,255,255,0.08);
+  /* iOS 10 兼容：不用 CSS Variables，所有值直接写死 */
+
+  * {
+    margin: 0;
+    padding: 0;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
   }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
 
   html, body {
-    height: 100%;
     width: 100%;
-    overflow: hidden;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    transition: background 1.5s ease, color 1.5s ease;
-  }
-
-  body {
-    background: var(--bg-night);
-    color: var(--text-night);
-  }
-
-  .container {
-    display: flex;
-    flex-direction: column;
     height: 100%;
-    padding: 20px 40px;
-    position: relative;
+    overflow: hidden;
+    background-color: #06080d;
+    color: #f0eeeb;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
   }
 
-  /* 上半区：时钟，占满横向 */
-  .top-panel {
-    flex: 1;
+  /* 主容器 — 使用旧版 Flexbox + safe area */
+  .container {
+    width: 100%;
+    height: 100%;
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    padding: 20px 40px;
+    padding-top: calc(20px + env(safe-area-inset-top));
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    padding-left: calc(40px + env(safe-area-inset-left));
+    padding-right: calc(40px + env(safe-area-inset-right));
+  }
+
+  /* 上半区：时钟 */
+  .top-panel {
+    -webkit-box-flex: 1;
+    -webkit-flex: 1;
+    flex: 1;
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
     align-items: center;
+    -webkit-box-pack: center;
+    -webkit-justify-content: center;
     justify-content: center;
     z-index: 1;
   }
 
-  /* 下半区：日期 + 天气，横向排列 */
+  /* 下半区：日期 + 天气 — iOS 10 不支持 gap，用 margin 代替 */
   .bottom-panel {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-align: end;
+    -webkit-align-items: flex-end;
     align-items: flex-end;
+    -webkit-box-pack: justify;
+    -webkit-justify-content: space-between;
     justify-content: space-between;
-    padding-bottom: 20px;
-    gap: 40px;
     z-index: 1;
   }
 
@@ -72,14 +93,12 @@
     width: 600px;
     height: 600px;
     border-radius: 50%;
+    -webkit-filter: blur(120px);
     filter: blur(120px);
     opacity: 0.15;
     pointer-events: none;
-    transition: background 1.5s ease;
+    background: #6c8cff;
   }
-
-  .day .ambient { background: var(--accent-day); }
-  .night .ambient { background: var(--accent-night); }
 
   /* Time */
   .time-section {
@@ -88,7 +107,9 @@
     z-index: 1;
   }
 
+  /* clamp() iOS 10 不支持，用 vw 做回退 */
   .time {
+    font-size: 28vw;
     font-size: clamp(160px, 28vw, 400px);
     font-weight: 700;
     letter-spacing: -6px;
@@ -97,6 +118,7 @@
   }
 
   .seconds {
+    font-size: 10vw;
     font-size: clamp(60px, 10vw, 140px);
     font-weight: 600;
     vertical-align: baseline;
@@ -108,9 +130,11 @@
     text-align: left;
     position: relative;
     z-index: 1;
+    margin-right: 40px;
   }
 
   .weekday {
+    font-size: 72px;
     font-size: clamp(20px, 3vw, 32px);
     font-weight: 600;
     letter-spacing: 6px;
@@ -119,9 +143,11 @@
   }
 
   .full-date {
+    font-size: 56px;
     font-size: clamp(16px, 2.2vw, 24px);
     font-weight: 300;
-    opacity: 0.5;
+    opacity: 0.7;
+    white-space: nowrap;
   }
 
   /* Divider */
@@ -129,95 +155,126 @@
     width: 40px;
     height: 1px;
     margin-bottom: 40px;
-    transition: background 1.5s ease;
+    background: rgba(255,255,255,0.2);
   }
-
-  .day .divider { background: var(--border-day); }
-  .night .divider { background: var(--border-night); }
 
   /* Weather */
   .weather-section {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -webkit-flex-direction: column;
     flex-direction: column;
+    -webkit-box-align: end;
+    -webkit-align-items: flex-end;
     align-items: flex-end;
-    gap: 4px;
     position: relative;
     z-index: 1;
   }
 
   .weather-main {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
     align-items: center;
-    gap: 12px;
   }
 
   .weather-icon {
+    margin-right: 12px;
+    font-size: 48px;
     font-size: clamp(36px, 5vh, 56px);
     line-height: 1;
-    filter: drop-shadow(0 4px 20px rgba(0,0,0,0.1));
   }
 
   .weather-temp {
+    font-size: 112px;
     font-size: clamp(28px, 4vh, 48px);
     font-weight: 300;
     letter-spacing: -2px;
   }
 
   .weather-desc {
+    margin-top: 4px;
+    font-size: 18px;
     font-size: clamp(14px, 1.8vh, 20px);
     font-weight: 400;
-    opacity: 0.5;
+    opacity: 0.7;
   }
 
   .weather-details {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
-    gap: 20px;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
     margin-top: 8px;
+    font-size: 24px;
     font-size: clamp(12px, 1.4vh, 15px);
-    opacity: 0.4;
+    opacity: 0.8;
     font-weight: 300;
   }
 
   .weather-details span {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
     align-items: center;
-    gap: 6px;
+  }
+
+  .weather-details span + span {
+    margin-left: 20px;
   }
 
   /* Forecast row */
   .forecast {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
-    gap: 12px;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
     margin-top: 8px;
     position: relative;
     z-index: 1;
   }
 
   .forecast-item {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
     align-items: center;
-    gap: 6px;
     padding: 8px 12px;
     border-radius: 12px;
-    transition: background 1.5s ease;
+    background: rgba(255,255,255,0.15);
   }
 
-  .day .forecast-item { background: var(--card-day); }
-  .night .forecast-item { background: var(--card-night); }
+  .forecast-item + .forecast-item {
+    margin-left: 12px;
+  }
 
   .forecast-day {
-    font-size: 13px;
-    opacity: 0.4;
+    font-size: 15px;
+    opacity: 0.6;
     font-weight: 400;
   }
 
   .forecast-icon {
-    font-size: 24px;
+    margin: 0 6px;
+    font-size: 26px;
     line-height: 1;
   }
 
   .forecast-temp {
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 300;
     font-variant-numeric: tabular-nums;
   }
@@ -225,18 +282,23 @@
   /* Loading */
   .loading {
     opacity: 0;
+    -webkit-animation: fadeIn 1s ease forwards;
     animation: fadeIn 1s ease forwards;
   }
 
+  @-webkit-keyframes fadeIn {
+    to { opacity: 1; }
+  }
   @keyframes fadeIn {
     to { opacity: 1; }
   }
 
   /* Greeting */
   .greeting {
+    font-size: 16px;
     font-size: clamp(13px, 1.4vh, 17px);
     font-weight: 300;
-    opacity: 0.25;
+    opacity: 0.5;
     letter-spacing: 2px;
     z-index: 1;
   }
@@ -244,12 +306,12 @@
   /* Error state */
   .weather-error {
     font-size: 16px;
-    opacity: 0.4;
+    opacity: 0.7;
     font-weight: 300;
   }
 </style>
 </head>
-<body class="night loading">
+<body class="loading">
 
 <div class="ambient" style="top: -200px; left: -200px;"></div>
 <div class="ambient" style="bottom: -200px; right: -200px;"></div>
@@ -283,12 +345,12 @@
 (function() {
   'use strict';
 
-  let LAT = 30.29;
-  let LNG = 120.16;
+  var LAT = 30.29;
+  var LNG = 120.16;
 
-  const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-  const FORECAST_DAY_NAMES = ['今天', '明天', '后天'];
-  const WEATHER_MAP = {
+  var WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+  var FORECAST_DAY_NAMES = ['今天', '明天', '后天'];
+  var WEATHER_MAP = {
     0:  ['☀️', '晴'],       1:  ['🌤️', '大部晴朗'],  2:  ['⛅', '多云'],
     3:  ['☁️', '阴天'],     45: ['🌫️', '雾'],         48: ['🌫️', '雾凇'],
     51: ['🌦️', '小毛毛雨'], 53: ['🌦️', '毛毛雨'],     55: ['🌦️', '大毛毛雨'],
@@ -301,22 +363,19 @@
     99: ['⛈️', '强雷暴冰雹'],
   };
 
-  // 缓存 DOM 引用
-  const $time = document.getElementById('time');
-  const $weekday = document.getElementById('weekday');
-  const $fullDate = document.getElementById('fullDate');
-  const $greeting = document.getElementById('greeting');
-  const $weatherIcon = document.getElementById('weatherIcon');
-  const $weatherTemp = document.getElementById('weatherTemp');
-  const $weatherDesc = document.getElementById('weatherDesc');
-  const $weatherDetails = document.getElementById('weatherDetails');
-  const $forecast = document.getElementById('forecast');
+  var $time = document.getElementById('time');
+  var $weekday = document.getElementById('weekday');
+  var $fullDate = document.getElementById('fullDate');
+  var $greeting = document.getElementById('greeting');
+  var $weatherIcon = document.getElementById('weatherIcon');
+  var $weatherTemp = document.getElementById('weatherTemp');
+  var $weatherDesc = document.getElementById('weatherDesc');
+  var $weatherDetails = document.getElementById('weatherDetails');
+  var $forecast = document.getElementById('forecast');
 
-  // 记录上次更新的日期相关值，避免无变化时重复写 DOM
-  let lastDateStr = '';
-  let lastGreeting = '';
+  var lastDateStr = '';
+  var lastGreeting = '';
 
-  // 问候语：按小时分段
   function getGreeting(hour) {
     if (hour < 6)  return '夜深了，早点休息';
     if (hour < 9)  return '早安';
@@ -327,11 +386,10 @@
     return '夜深了，早点休息';
   }
 
-  // 对齐到下一秒整点，消除 setInterval 漂移
   function scheduleClock() {
-    const now = Date.now();
-    const ms = now % 1000;
-    const delay = ms === 0 ? 1000 : 1000 - ms;
+    var now = Date.now();
+    var ms = now % 1000;
+    var delay = ms === 0 ? 1000 : 1000 - ms;
     setTimeout(function() {
       updateClock();
       scheduleClock();
@@ -339,41 +397,38 @@
   }
 
   function updateClock() {
-    const now = new Date();
-    const h = String(now.getHours()).padStart(2, '0');
-    const m = String(now.getMinutes()).padStart(2, '0');
-    const s = String(now.getSeconds()).padStart(2, '0');
+    var now = new Date();
+    var h = String(now.getHours()).padStart(2, '0');
+    var m = String(now.getMinutes()).padStart(2, '0');
+    var s = String(now.getSeconds()).padStart(2, '0');
 
-    // 时间每秒必变，直接更新
     $time.innerHTML = h + ':' + m + '<span class="seconds">' + s + '</span>';
 
-    // 日期/星期/问候语：只在变化时更新
-    const day = now.getDay();
-    const dateStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日' + day;
+    var day = now.getDay();
+    var dateStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日' + day;
     if (dateStr !== lastDateStr) {
       lastDateStr = dateStr;
       $weekday.textContent = WEEKDAYS[day];
       $fullDate.textContent = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日';
     }
 
-    const greeting = getGreeting(now.getHours());
+    var greeting = getGreeting(now.getHours());
     if (greeting !== lastGreeting) {
       lastGreeting = greeting;
       $greeting.textContent = greeting;
     }
   }
 
-  async function fetchWeather() {
-    try {
-      const resp = await fetch(
-        'https://api.open-meteo.com/v1/forecast?latitude=' + LAT +
-        '&longitude=' + LNG +
-        '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m' +
-        '&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5'
-      );
+  function fetchWeather() {
+    fetch(
+      'https://api.open-meteo.com/v1/forecast?latitude=' + LAT +
+      '&longitude=' + LNG +
+      '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m' +
+      '&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5'
+    ).then(function(resp) {
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      const data = await resp.json();
-
+      return resp.json();
+    }).then(function(data) {
       var current = data.current;
       var w = WEATHER_MAP[current.weather_code] || ['🌡️', '未知'];
 
@@ -385,7 +440,6 @@
         '<span>湿度 ' + current.relative_humidity_2m + '%</span>' +
         '<span>风速 ' + Math.round(current.wind_speed_10m) + ' km/h</span>';
 
-      // 预报：拼接字符串一次性写入，避免循环内 innerHTML +=
       var daily = data.daily;
       var count = Math.min(4, daily.time.length);
       var html = '';
@@ -398,15 +452,14 @@
           '° / ' + Math.round(daily.temperature_2m_min[i]) + '°</div></div>';
       }
       $forecast.innerHTML = html;
-    } catch (e) {
+    }).catch(function(e) {
       console.error('Weather fetch failed:', e);
       $weatherDesc.textContent = '天气加载失败';
       $weatherIcon.textContent = '⚠️';
       $weatherTemp.textContent = '--°';
-    }
+    });
   }
 
-  // Geolocation
   function getGeoLocation() {
     return new Promise(function(resolve) {
       if (!navigator.geolocation) { resolve(null); return; }
@@ -419,16 +472,14 @@
   }
 
   // 启动
-  (async function init() {
-    updateClock();
-    scheduleClock();
+  updateClock();
+  scheduleClock();
 
-    var geo = await getGeoLocation();
+  getGeoLocation().then(function(geo) {
     if (geo) { LAT = geo.lat; LNG = geo.lng; }
-
     fetchWeather();
     setInterval(fetchWeather, 600000);
-  })();
+  });
 })();
 </script>
 

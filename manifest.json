@@ -1,0 +1,23 @@
+{
+  "name": "客厅时钟",
+  "short_name": "客厅时钟",
+  "description": "极简风格的客厅时钟看板，实时时钟 + 天气显示",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1117",
+  "theme_color": "#0f1117",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "lang": "zh-CN"
+}
