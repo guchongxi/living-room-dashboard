@@ -4,7 +4,7 @@
 
 ## 预览
 
-![screenshot](screenshot-v2.png)
+![screenshot](screenshot-v3.png)
 
 直接打开 `index.html` 即可在浏览器中查看。
 
