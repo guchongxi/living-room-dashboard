@@ -1,1439 +1,1345 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="客厅时钟">
-<meta name="format-detection" content="telephone=no">
-<title>客厅时钟</title>
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-192.png">
-<link rel="icon" type="image/png" href="icon-192.png">
-<style>
-  @font-face { font-family: 'Inter'; font-weight: 200; src: url('fonts/Inter-200.ttf') format('truetype'); }
-  @font-face { font-family: 'Inter'; font-weight: 300; src: url('fonts/Inter-300.ttf') format('truetype'); }
-  @font-face { font-family: 'Inter'; font-weight: 400; src: url('fonts/Inter-400.ttf') format('truetype'); }
-  @font-face { font-family: 'Inter'; font-weight: 600; src: url('fonts/Inter-600.ttf') format('truetype'); }
-  @font-face { font-family: 'Inter'; font-weight: 700; src: url('fonts/Inter-700.ttf') format('truetype'); }
-
-  /* iOS 10 兼容：不用 CSS Variables，所有值直接写死 */
-
-  * {
-    margin: 0;
-    padding: 0;
-    -webkit-box-sizing: border-box;
-    box-sizing: border-box;
-  }
-
-  html, body {
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background-color: #06080d;
-    color: #f0eeeb;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    -webkit-text-size-adjust: 100%;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  /* 2048×1536 逻辑画布，由脚本按视口等比缩放居中 */
-  .stage {
-    position: fixed;
-    left: 50%;
-    top: 50%;
-    width: 2048px;
-    height: 1536px;
-    -webkit-transform: translate(-50%, -50%);
-    transform: translate(-50%, -50%);
-    -webkit-transform-origin: center center;
-    transform-origin: center center;
-    overflow: visible;
-  }
-
-  /* 主容器 — 左右顶满画布，仅保留安全区 inset */
-  .container {
-    width: 100%;
-    height: 100%;
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-orient: vertical;
-    -webkit-box-direction: normal;
-    -webkit-flex-direction: column;
-    flex-direction: column;
-    padding: 18px 0;
-    padding-top: calc(18px + env(safe-area-inset-top));
-    padding-bottom: calc(18px + env(safe-area-inset-bottom));
-    /* 无 safe-area 时顶到画布边；有刘海/圆角时再加 inset */
-    padding-left: 0;
-    padding-right: 0;
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-  }
-
-  /* 日期时间：静态标签低调，动态数字更亮 */
-  .date-static,
-  .time-sep {
-    color: #9a9590;
-    opacity: 0.85;
-    font-weight: 400;
-  }
-
-  .date-dynamic,
-  .time .time-part {
-    color: #ffffff;
-    opacity: 1;
-    font-weight: 700;
-  }
-
-  .time .seconds.date-dynamic {
-    font-weight: 600;
-    opacity: 0.92;
-  }
-
-  /* 上 2/3：时间 + 猫 + 猫语；上下弹性占位约 3:1；translateY 仅下移绘制，不占新布局空间，与底栏重叠 */
-  .top-panel {
-    position: relative;
-    -webkit-box-flex: 2;
-    -webkit-flex: 2 1 0%;
-    flex: 2 1 0%;
-    min-height: 0;
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-orient: vertical;
-    -webkit-box-direction: normal;
-    -webkit-flex-direction: column;
-    flex-direction: column;
-    -webkit-box-align: stretch;
-    -webkit-align-items: stretch;
-    align-items: stretch;
-    -webkit-box-pack: start;
-    -webkit-justify-content: flex-start;
-    justify-content: flex-start;
-    padding-top: 32px;
-    padding-bottom: 24px;
-    z-index: 5;
-    overflow: visible;
-    -webkit-transform: translateY(150px);
-    transform: translateY(150px);
-  }
-
-  .top-panel-spacer--top {
-    -webkit-box-flex: 3;
-    -webkit-flex: 3 1 0%;
-    flex: 3 1 0%;
-    min-height: 0;
-  }
-
-  .top-panel-spacer--bottom {
-    -webkit-box-flex: 1;
-    -webkit-flex: 1 1 0%;
-    flex: 1 1 0%;
-    min-height: 0;
-  }
-
-  .top-panel-stack {
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-orient: vertical;
-    -webkit-box-direction: normal;
-    -webkit-flex-direction: column;
-    flex-direction: column;
-    -webkit-box-align: center;
-    -webkit-align-items: center;
-    align-items: center;
-    -webkit-box-pack: start;
-    -webkit-justify-content: flex-start;
-    justify-content: flex-start;
-    -webkit-box-flex: 0;
-    -webkit-flex: 0 0 auto;
-    flex: 0 0 auto;
-    min-height: 0;
-    width: 100%;
-  }
-
-  /* 猫与「猫语」紧跟在时钟下方（仍在上方区域内） */
-  .pet-cat-block {
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-orient: vertical;
-    -webkit-box-direction: normal;
-    -webkit-flex-direction: column;
-    flex-direction: column;
-    -webkit-box-align: center;
-    -webkit-align-items: center;
-    align-items: center;
-    width: 100%;
-    -webkit-flex: 0 0 auto;
-    flex: 0 0 auto;
-    margin: 0 auto;
-  }
-
-  /* 猫 */
-  .pet-cat-wrap {
-    position: relative;
-    pointer-events: none;
-    z-index: 1;
-    margin-top: 24px;
-    -webkit-flex: 0 0 auto;
-    flex: 0 0 auto;
-  }
-
-  .pet-cat-inner {
-    /* 走动时仅用 translate3d 偏移，避免触发布局 */
-    -webkit-transform: translate3d(0, 0, 0);
-    transform: translate3d(0, 0, 0);
-  }
-
-  .pet-cat-art {
-    margin: 0;
-    font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
-    font-size: 92px;
-    font-weight: 400;
-    line-height: 1.15;
-    white-space: pre;
-    text-align: center;
-    color: #ece8e2;
-    opacity: 0.55;
-    -webkit-user-select: none;
-    user-select: none;
-  }
-
-  /* 下 1/3：左日期 | 右天气 */
-  .bottom-panel {
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-align: end;
-    -webkit-align-items: flex-end;
-    align-items: flex-end;
-    -webkit-box-pack: justify;
-    -webkit-justify-content: space-between;
-    justify-content: space-between;
-    -webkit-box-flex: 1;
-    -webkit-flex: 1 1 0%;
-    flex: 1 1 0%;
-    min-height: 0;
-    z-index: 1;
-    overflow-x: hidden;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* Ambient glow */
-  .ambient {
-    position: fixed;
-    width: 900px;
-    height: 900px;
-    border-radius: 50%;
-    -webkit-filter: blur(120px);
-    filter: blur(120px);
-    opacity: 0.15;
-    pointer-events: none;
-    background: #6c8cff;
-  }
-
-  /* Time — 画布坐标 px */
-  .time-section {
-    width: 100%;
-    text-align: center;
-    position: relative;
-    z-index: 1;
-    -webkit-flex: 0 0 auto;
-    flex: 0 0 auto;
-    -webkit-transform: translate3d(0, 0, 0);
-    transform: translate3d(0, 0, 0);
-  }
-
-  .time {
-    font-size: 620px;
-    font-weight: 700;
-    letter-spacing: -30px;
-    line-height: 0.82;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  .time .time-sep {
-    letter-spacing: 0;
-    margin: 0 2px;
-    font-size: 580px;
-    font-weight: 600;
-    vertical-align: 0.04em;
-  }
-
-  .time .seconds {
-    font-size: 208px;
-    font-weight: 600;
-    vertical-align: 0.34em;
-    margin-left: 8px;
-    letter-spacing: -8px;
-  }
-
-  .date-section {
-    text-align: left;
-    position: relative;
-    z-index: 1;
-    margin-right: 24px;
-    -webkit-box-flex: 1;
-    -webkit-flex: 1 1 auto;
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  .weekday {
-    font-size: 84px;
-    font-weight: 600;
-    letter-spacing: 12px;
-    margin-bottom: 14px;
-  }
-
-  .full-date {
-    font-size: 60px;
-    font-weight: 300;
-    white-space: nowrap;
-  }
-
-  .full-date .date-static {
-    font-weight: 300;
-  }
-
-  .full-date .date-dynamic {
-    font-weight: 600;
-  }
-
-  /* Divider */
-  .divider {
-    width: 40px;
-    height: 1px;
-    margin-bottom: 40px;
-    background: rgba(255,255,255,0.2);
-  }
-
-  /* Weather */
-  .weather-section {
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-orient: vertical;
-    -webkit-box-direction: normal;
-    -webkit-flex-direction: column;
-    flex-direction: column;
-    -webkit-box-align: end;
-    -webkit-align-items: flex-end;
-    align-items: flex-end;
-    -webkit-flex: 0 0 auto;
-    flex: 0 0 auto;
-    position: relative;
-    z-index: 1;
-    margin-left: 0;
-  }
-
-  .weather-main {
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-align: center;
-    -webkit-align-items: center;
-    align-items: center;
-  }
-
-  .weather-icon {
-    margin-right: 16px;
-    font-size: 132px;
-    line-height: 1;
-  }
-
-  .weather-temp {
-    font-size: 168px;
-    font-weight: 300;
-    letter-spacing: -6px;
-  }
-
-  .weather-desc {
-    margin-top: 12px;
-    font-size: 44px;
-    font-weight: 400;
-    opacity: 0.75;
-  }
-
-  .weather-details {
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-align: center;
-    -webkit-align-items: center;
-    align-items: center;
-    margin-top: 16px;
-    font-size: 34px;
-    opacity: 0.82;
-    font-weight: 300;
-  }
-
-  .weather-details span {
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-align: center;
-    -webkit-align-items: center;
-    align-items: center;
-  }
-
-  .weather-details span + span {
-    margin-left: 28px;
-  }
-
-  /* Forecast row */
-  .forecast {
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-align: center;
-    -webkit-align-items: center;
-    align-items: center;
-    margin-top: 18px;
-    position: relative;
-    z-index: 1;
-  }
-
-  .forecast-item {
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-align: center;
-    -webkit-align-items: center;
-    align-items: center;
-    padding: 16px 22px;
-    border-radius: 16px;
-    background: rgba(255,255,255,0.15);
-  }
-
-  .forecast-item + .forecast-item {
-    margin-left: 18px;
-  }
-
-  .forecast-day {
-    font-size: 34px;
-    opacity: 0.65;
-    font-weight: 400;
-  }
-
-  .forecast-icon {
-    margin: 0 12px;
-    font-size: 54px;
-    line-height: 1;
-  }
-
-  .forecast-temp {
-    font-size: 38px;
-    font-weight: 300;
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* Loading */
-  .loading {
-    opacity: 0;
-    -webkit-animation: fadeIn 1s ease forwards;
-    animation: fadeIn 1s ease forwards;
-  }
-
-  @-webkit-keyframes fadeIn {
-    to { opacity: 1; }
-  }
-  @keyframes fadeIn {
-    to { opacity: 1; }
-  }
-
-  /* 气泡：指向猫猫，像说过的话 */
-  .cat-speech {
-    position: relative;
-    margin-top: 36px;
-    padding: 22px 36px 32px;
-    width: 92%;
-    max-width: 960px;
-    text-align: center;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.14);
-    border-radius: 24px;
-    pointer-events: none;
-    margin-bottom: 8px;
-  }
-
-  .cat-speech::before {
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    width: 0;
-    height: 0;
-    margin-left: -11px;
-    border-left: 11px solid transparent;
-    border-right: 11px solid transparent;
-    border-bottom: 12px solid rgba(255,255,255,0.08);
-  }
-
-  /* Greeting：默认静止；小猫动作时加 cat-speech--wave，逐字单次起伏连成一波从左到右 */
-  .greeting {
-    font-size: 34px;
-    font-weight: 400;
-    opacity: 0.9;
-    letter-spacing: 3px;
-    line-height: 1.55;
-    color: #ece8e2;
-    margin: 0;
-    padding: 0 4px 4px;
-    z-index: 1;
-    display: -webkit-inline-box;
-    display: -webkit-inline-flex;
-    display: inline-flex;
-    -webkit-box-orient: horizontal;
-    -webkit-box-direction: normal;
-    -webkit-flex-direction: row;
-    flex-direction: row;
-    -webkit-flex-wrap: wrap;
-    flex-wrap: wrap;
-    -webkit-box-pack: center;
-    -webkit-justify-content: center;
-    justify-content: center;
-    -webkit-box-align: baseline;
-    -webkit-align-items: baseline;
-    align-items: baseline;
-    max-width: 100%;
-  }
-
-  .greeting-char {
-    display: inline-block;
-    -webkit-animation: none;
-    animation: none;
-  }
-
-  .cat-speech.cat-speech--wave .greeting-char {
-    -webkit-animation: greetingWaveOnce 0.55s ease-in-out 1 both;
-    animation: greetingWaveOnce 0.55s ease-in-out 1 both;
-    -webkit-animation-delay: calc(var(--i, 0) * 0.05s);
-    animation-delay: calc(var(--i, 0) * 0.05s);
-  }
-
-  @-webkit-keyframes greetingWaveOnce {
-    0%, 100% { -webkit-transform: translateY(0); transform: translateY(0); }
-    50% { -webkit-transform: translateY(-5px); transform: translateY(-5px); }
-  }
-  @keyframes greetingWaveOnce {
-    0%, 100% { -webkit-transform: translateY(0); transform: translateY(0); }
-    50% { -webkit-transform: translateY(-5px); transform: translateY(-5px); }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .cat-speech.cat-speech--wave .greeting-char {
-      -webkit-animation: none;
-      animation: none;
-    }
-  }
-
-  /* Error state */
-  .weather-error {
-    font-size: 32px;
-    opacity: 0.7;
-    font-weight: 300;
-  }
-
-  /* ========== 设计稿还原（优先相对位置） ========== */
-  body {
-    background: #030b1f;
-    background-image: linear-gradient(rgba(3, 11, 31, 0.14), rgba(3, 11, 31, 0.42)), url('bg.jpg');
-    background-size: cover;
-    background-position: center;
-  }
-
-  .stage {
-    width: 2048px;
-    height: 1536px;
-  }
-
-  .container.design-panel {
-    position: relative;
-    width: calc(100% - 72px);
-    height: calc(100% - 84px);
-    margin: 48px 36px 36px;
-    padding: 0;
-    border-radius: 0;
-    border: 0;
-    background: transparent;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    -webkit-box-shadow: none;
-    box-shadow: none;
-    overflow: hidden;
-  }
-
-  .top-panel {
-    position: absolute;
-    left: 148px;
-    top: 240px;
-    width: 980px;
-    height: auto;
-    min-height: 0;
-    padding: 0;
-    margin: 0;
-    -webkit-transform: none;
-    transform: none;
-    -webkit-box-flex: initial;
-    -webkit-flex: initial;
-    flex: initial;
-    z-index: 6;
-  }
-
-  .top-panel-spacer--top,
-  .top-panel-spacer--bottom {
-    display: none;
-  }
-
-  .top-panel-stack {
-    -webkit-box-align: start;
-    -webkit-align-items: flex-start;
-    align-items: flex-start;
-  }
-
-  .time-section {
-    width: 980px;
-    text-align: left;
-  }
-
-  .time {
-    font-size: 392px;
-    font-weight: 700;
-    letter-spacing: -10px;
-    line-height: 0.88;
-    color: #f5f7ff;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-  }
-
-  .time .time-sep {
-    font-size: 370px;
-    margin: 0 2px;
-    color: #f5f7ff;
-    opacity: 0.98;
-  }
-
-  .time .seconds {
-    font-size: 92px;
-    font-weight: 500;
-    margin-left: 4px;
-    vertical-align: 0.22em;
-    letter-spacing: -2px;
-    color: #c6d2ef;
-    opacity: 1;
-  }
-
-  .pet-cat-block {
-    margin-top: 24px;
-    -webkit-box-align: center;
-    -webkit-align-items: center;
-    align-items: center;
-  }
-
-  .pet-cat-wrap {
-    margin-top: 0;
-  }
-
-  .pet-cat-art {
-    font-size: 82px;
-    line-height: 1.12;
-    color: #d2defb;
-    opacity: 0.68;
-  }
-
-  .cat-speech {
-    margin-top: 16px;
-    margin-bottom: 0;
-    width: 450px;
-    max-width: 450px;
-    min-height: 64px;
-    padding: 12px 24px;
-    border-radius: 999px;
-    background: rgba(26, 45, 92, 0.52);
-    border: 1px solid rgba(158, 182, 237, 0.26);
-    -webkit-box-shadow: 0 8px 24px rgba(4, 10, 28, 0.22);
-    box-shadow: 0 8px 24px rgba(4, 10, 28, 0.22);
-  }
-
-  .cat-speech::before {
-    display: none;
-  }
-
-  .greeting {
-    font-size: 42px;
-    font-weight: 600;
-    line-height: 1.3;
-    letter-spacing: 2px;
-    color: #f1f5ff;
-    opacity: 0.96;
-    text-align: center;
-    width: 100%;
-    -webkit-box-pack: center;
-    -webkit-justify-content: center;
-    justify-content: center;
-  }
-
-  .bottom-panel {
-    position: absolute;
-    right: 116px;
-    top: 220px;
-    width: 540px;
-    min-height: 386px;
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-orient: vertical;
-    -webkit-box-direction: normal;
-    -webkit-flex-direction: column;
-    flex-direction: column;
-    -webkit-box-align: end;
-    -webkit-align-items: flex-end;
-    align-items: flex-end;
-    -webkit-box-pack: start;
-    -webkit-justify-content: flex-start;
-    justify-content: flex-start;
-    -webkit-box-flex: initial;
-    -webkit-flex: initial;
-    flex: initial;
-    overflow: visible;
-    z-index: 7;
-  }
-
-  .date-section {
-    width: 100%;
-    margin: 0 0 14px;
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-orient: vertical;
-    -webkit-box-direction: normal;
-    -webkit-flex-direction: column;
-    flex-direction: column;
-    text-align: right;
-    -webkit-box-flex: initial;
-    -webkit-flex: initial;
-    flex: initial;
-  }
-
-  .weather-update-corner {
-    width: 100%;
-    text-align: right;
-    font-size: 30px;
-    line-height: 1.25;
-    color: #95a6ca;
-    opacity: 0.9;
-    margin-bottom: 14px;
-  }
-
-  .weekday {
-    font-size: 64px;
-    font-weight: 600;
-    letter-spacing: 2px;
-    margin-bottom: 6px;
-    color: #f5f7ff;
-    -webkit-box-ordinal-group: 2;
-    -webkit-order: 1;
-    order: 1;
-  }
-
-  .full-date {
-    font-size: 64px;
-    font-weight: 600;
-    line-height: 1.2;
-    color: #f5f7ff;
-    margin-bottom: 6px;
-    -webkit-box-ordinal-group: 1;
-    -webkit-order: 0;
-    order: 0;
-  }
-
-  .full-date .date-static,
-  .weekday .date-static {
-    color: #c6d2ef;
-    font-weight: 500;
-    opacity: 0.8;
-    display: inline-block;
-    vertical-align: baseline;
-  }
-
-  .weekday .date-static {
-    font-size: 0.68em;
-    margin-right: 8px;
-  }
-
-  .full-date .date-static {
-    font-size: 0.58em;
-    margin: 0 4px;
-    vertical-align: 0.08em;
-  }
-
-  .weekday .date-dynamic,
-  .full-date .date-dynamic {
-    display: inline-block;
-    vertical-align: baseline;
-  }
-
-  .weather-section {
-    width: 100%;
-    margin-left: 0;
-    -webkit-box-align: end;
-    -webkit-align-items: flex-end;
-    align-items: flex-end;
-  }
-
-  .weather-main {
-    width: 100%;
-    -webkit-box-pack: end;
-    -webkit-justify-content: flex-end;
-    justify-content: flex-end;
-    margin-top: 8px;
-  }
-
-  .weather-icon {
-    margin-right: 18px;
-    font-size: 88px;
-    color: #eaf1ff;
-  }
-
-  .weather-temp {
-    font-size: 106px;
-    font-weight: 400;
-    letter-spacing: -2px;
-    color: #f5f7ff;
-  }
-
-  .weather-desc {
-    margin-top: 8px;
-    font-size: 58px;
-    font-weight: 500;
-    color: #f5f7ff;
-    opacity: 1;
-  }
-
-  .weather-details {
-    margin-top: 12px;
-    font-size: 30px;
-    color: #c6d2ef;
-    opacity: 0.95;
-    font-weight: 400;
-    white-space: nowrap;
-  }
-
-  .weather-details span + span {
-    margin-left: 20px;
-  }
-
-  .forecast {
-    width: 728px;
-    margin-top: 42px;
-    margin-right: -8px;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0;
-    border-radius: 32px;
-    border: 1px solid rgba(158, 182, 237, 0.26);
-    background: rgba(26, 45, 92, 0.34);
-    -webkit-box-shadow: 0 8px 24px rgba(4, 10, 28, 0.22);
-    box-shadow: 0 8px 24px rgba(4, 10, 28, 0.22);
-    overflow: hidden;
-  }
-
-  .forecast-item {
-    height: 250px;
-    min-height: 250px;
-    padding: 22px 14px 20px;
-    border-radius: 0;
-    background: transparent;
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-orient: vertical;
-    -webkit-box-direction: normal;
-    -webkit-flex-direction: column;
-    flex-direction: column;
-    -webkit-box-pack: justify;
-    -webkit-justify-content: space-between;
-    justify-content: space-between;
-    -webkit-box-align: center;
-    -webkit-align-items: center;
-    align-items: center;
-    text-align: center;
-    border-left: 1px solid rgba(214, 226, 255, 0.2);
-  }
-
-  .forecast-item:first-child {
-    border-left: 0;
-  }
-
-  .forecast-day {
-    font-size: 42px;
-    color: #c6d2ef;
-    opacity: 1;
-  }
-
-  .forecast-icon {
-    margin: 0;
-    font-size: 64px;
-    color: #eaf1ff;
-  }
-
-  .forecast-temp {
-    font-size: 46px;
-    font-weight: 500;
-    color: #f5f7ff;
-    white-space: nowrap;
-  }
-
-  .bottom-dock {
-    position: absolute;
-    left: 62px;
-    right: 58px;
-    bottom: 38px;
-    height: 48px;
-    display: -webkit-box;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-box-align: center;
-    -webkit-align-items: center;
-    align-items: center;
-    -webkit-box-pack: start;
-    -webkit-justify-content: flex-start;
-    justify-content: flex-start;
-    z-index: 8;
-    color: #95a6ca;
-  }
-
-  .dock-center {
-    position: absolute;
-    left: 50%;
-    -webkit-transform: translateX(-50%);
-    transform: translateX(-50%);
-    font-size: 42px;
-    color: #c6d2ef;
-    letter-spacing: 1px;
-    white-space: nowrap;
-  }
-
-  .dock-center::before,
-  .dock-center::after {
-    content: '—';
-    color: #8ea2cb;
-    margin: 0 18px;
-  }
-</style>
-</head>
-<body class="loading">
-
-<div class="ambient" style="top: -200px; left: -200px;"></div>
-<div class="ambient" style="bottom: -200px; right: -200px;"></div>
-
-<div class="stage" id="stage">
-<div class="container design-panel">
-  <div class="top-panel">
-    <div class="top-panel-spacer top-panel-spacer--top" aria-hidden="true"></div>
-    <div class="top-panel-stack">
-      <div class="time-section">
-        <div class="time" id="time">
-          <span class="time-part date-dynamic" id="timeH">--</span><span class="time-sep date-static">:</span><span class="time-part date-dynamic" id="timeM">--</span><span class="seconds date-dynamic" id="timeS">00</span>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="客厅时钟" />
+    <meta name="format-detection" content="telephone=no" />
+    <title>客厅时钟</title>
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <link rel="icon" type="image/png" href="icon-192.png" />
+    <style>
+      @font-face {
+        font-family: "Inter";
+        font-weight: 300;
+        font-display: swap;
+        src: url("fonts/Inter-300.ttf") format("truetype");
+      }
+      @font-face {
+        font-family: "Inter";
+        font-weight: 400;
+        font-display: swap;
+        src: url("fonts/Inter-400.ttf") format("truetype");
+      }
+      @font-face {
+        font-family: "Inter";
+        font-weight: 600;
+        font-display: swap;
+        src: url("fonts/Inter-600.ttf") format("truetype");
+      }
+      @font-face {
+        font-family: "Inter";
+        font-weight: 700;
+        font-display: swap;
+        src: url("fonts/Inter-700.ttf") format("truetype");
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        -webkit-box-sizing: border-box;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        color: #f0eeeb;
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+        -webkit-text-size-adjust: 100%;
+        -webkit-font-smoothing: antialiased;
+        background: #030b1f;
+        background-image: linear-gradient(
+            rgba(3, 11, 31, 0.14),
+            rgba(3, 11, 31, 0.42)
+          ),
+          url("bg.jpg");
+        background-size: cover;
+        background-position: center;
+      }
+
+      /* 2048×1536 逻辑画布，由脚本按视口等比缩放居中 */
+      .stage {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        width: 2048px;
+        height: 1536px;
+        -webkit-transform: translate(-50%, -50%);
+        transform: translate(-50%, -50%);
+        -webkit-transform-origin: center center;
+        transform-origin: center center;
+        overflow: visible;
+      }
+
+      .container {
+        position: relative;
+        width: calc(100% - 72px);
+        height: calc(100% - 84px);
+        margin: 48px 36px 36px;
+        padding: 0;
+        border-radius: 0;
+        border: 0;
+        background: transparent;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        -webkit-box-shadow: none;
+        box-shadow: none;
+        overflow: hidden;
+      }
+
+      /* 日期时间：静态标签低调，动态数字更亮 */
+      .date-static {
+        color: #c6d2ef;
+        font-weight: 500;
+        opacity: 0.8;
+        display: inline-block;
+        vertical-align: baseline;
+      }
+
+      .time-sep {
+        color: #f5f7ff;
+        opacity: 0.98;
+        font-weight: 600;
+        letter-spacing: 0;
+        margin: 0 2px;
+        font-size: 370px;
+      }
+
+      .date-dynamic,
+      .time .time-part {
+        color: #ffffff;
+        opacity: 1;
+        font-weight: 700;
+      }
+
+      .time .seconds.date-dynamic {
+        font-weight: 600;
+        opacity: 0.92;
+      }
+
+      /* 顶部区域：时间 + 猫 + 猫语 */
+      .top-panel {
+        position: absolute;
+        left: 30px;
+        top: 130px;
+        width: 1240px;
+        height: auto;
+        min-height: 0;
+        padding: 0;
+        margin: 0;
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-orient: vertical;
+        -webkit-box-direction: normal;
+        -webkit-flex-direction: column;
+        flex-direction: column;
+        -webkit-box-align: stretch;
+        -webkit-align-items: stretch;
+        align-items: stretch;
+        -webkit-transform: none;
+        transform: none;
+        -webkit-box-flex: initial;
+        -webkit-flex: initial;
+        flex: initial;
+        overflow: visible;
+        z-index: 6;
+      }
+
+      .top-panel-spacer--top,
+      .top-panel-spacer--bottom {
+        display: none;
+      }
+
+      .top-panel-stack {
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-orient: vertical;
+        -webkit-box-direction: normal;
+        -webkit-flex-direction: column;
+        flex-direction: column;
+        -webkit-box-align: start;
+        -webkit-align-items: flex-start;
+        align-items: flex-start;
+        -webkit-box-pack: start;
+        -webkit-justify-content: flex-start;
+        justify-content: flex-start;
+        -webkit-box-flex: 0;
+        -webkit-flex: 0 0 auto;
+        flex: 0 0 auto;
+        min-height: 0;
+        width: 100%;
+      }
+
+      /* Time */
+      .time-section {
+        width: 1240px;
+        text-align: left;
+        position: relative;
+        z-index: 1;
+        -webkit-flex: 0 0 auto;
+        flex: 0 0 auto;
+        -webkit-transform: translate3d(0, 0, 0);
+        transform: translate3d(0, 0, 0);
+      }
+
+      .time {
+        font-size: 420px;
+        font-weight: 700;
+        letter-spacing: -10px;
+        line-height: 0.88;
+        color: #f5f7ff;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .time .seconds {
+        font-size: 160px;
+        font-weight: 500;
+        margin-left: 4px;
+        vertical-align: 0.22em;
+        letter-spacing: -2px;
+        color: #c6d2ef;
+        opacity: 1;
+      }
+
+      /* 猫与猫语 */
+      .pet-cat-block {
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-orient: vertical;
+        -webkit-box-direction: normal;
+        -webkit-flex-direction: column;
+        flex-direction: column;
+        -webkit-box-align: center;
+        -webkit-align-items: center;
+        align-items: center;
+        width: 100%;
+        -webkit-flex: 0 0 auto;
+        flex: 0 0 auto;
+        margin: 160px auto 0;
+      }
+
+      .pet-cat-wrap {
+        position: relative;
+        pointer-events: none;
+        z-index: 1;
+        margin-top: 0;
+        -webkit-flex: 0 0 auto;
+        flex: 0 0 auto;
+      }
+
+      .pet-cat-inner {
+        -webkit-transform: translate3d(0, 0, 0);
+        transform: translate3d(0, 0, 0);
+      }
+
+      .pet-cat-art {
+        margin: 0;
+        font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+        font-weight: 400;
+        white-space: pre;
+        text-align: center;
+        -webkit-user-select: none;
+        user-select: none;
+        font-size: 120px;
+        line-height: 1.12;
+        color: #d2defb;
+        opacity: 0.68;
+      }
+
+      .cat-speech {
+        position: relative;
+        text-align: center;
+        pointer-events: none;
+        margin-top: 16px;
+        margin-bottom: 0;
+        width: -webkit-max-content;
+        width: max-content;
+        max-width: calc(100% - 8px);
+        min-width: 0;
+        min-height: 64px;
+        padding: 12px 28px;
+        border-radius: 999px;
+        background: rgba(26, 45, 92, 0.52);
+        border: 1px solid rgba(158, 182, 237, 0.26);
+        -webkit-box-shadow: 0 8px 24px rgba(4, 10, 28, 0.22);
+        box-shadow: 0 8px 24px rgba(4, 10, 28, 0.22);
+      }
+
+      .cat-speech::before {
+        display: none;
+      }
+
+      .greeting {
+        margin: 0;
+        padding: 0 4px 4px;
+        z-index: 1;
+        display: -webkit-inline-box;
+        display: -webkit-inline-flex;
+        display: inline-flex;
+        -webkit-box-orient: horizontal;
+        -webkit-box-direction: normal;
+        -webkit-flex-direction: row;
+        flex-direction: row;
+        -webkit-flex-wrap: nowrap;
+        flex-wrap: nowrap;
+        -webkit-box-pack: center;
+        -webkit-justify-content: center;
+        justify-content: center;
+        -webkit-box-align: baseline;
+        -webkit-align-items: baseline;
+        align-items: baseline;
+        max-width: none;
+        font-size: 42px;
+        font-weight: 600;
+        line-height: 1.3;
+        letter-spacing: 2px;
+        color: #f1f5ff;
+        opacity: 0.96;
+        text-align: center;
+        white-space: nowrap;
+        width: auto;
+      }
+
+      .greeting-char {
+        display: inline-block;
+        -webkit-animation: none;
+        animation: none;
+      }
+
+      .cat-speech.cat-speech--wave .greeting-char {
+        -webkit-animation: greetingWaveOnce 0.55s ease-in-out 1 both;
+        animation: greetingWaveOnce 0.55s ease-in-out 1 both;
+        -webkit-animation-delay: calc(var(--i, 0) * 0.05s);
+        animation-delay: calc(var(--i, 0) * 0.05s);
+      }
+
+      @-webkit-keyframes greetingWaveOnce {
+        0%,
+        100% {
+          -webkit-transform: translateY(0);
+          transform: translateY(0);
+        }
+        50% {
+          -webkit-transform: translateY(-5px);
+          transform: translateY(-5px);
+        }
+      }
+      @keyframes greetingWaveOnce {
+        0%,
+        100% {
+          -webkit-transform: translateY(0);
+          transform: translateY(0);
+        }
+        50% {
+          -webkit-transform: translateY(-5px);
+          transform: translateY(-5px);
+        }
+      }
+
+      /* 底部区域：日期 + 天气 */
+      .bottom-panel {
+        position: absolute;
+        right: 30px;
+        top: 100px;
+        width: 540px;
+        min-height: 386px;
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-orient: vertical;
+        -webkit-box-direction: normal;
+        -webkit-flex-direction: column;
+        flex-direction: column;
+        -webkit-box-align: end;
+        -webkit-align-items: flex-end;
+        align-items: flex-end;
+        -webkit-box-pack: start;
+        -webkit-justify-content: flex-start;
+        justify-content: flex-start;
+        -webkit-box-flex: initial;
+        -webkit-flex: initial;
+        flex: initial;
+        overflow: visible;
+        z-index: 7;
+        min-height: 0;
+      }
+
+      .weather-update-corner {
+        width: 100%;
+        text-align: right;
+        font-size: 30px;
+        line-height: 1.25;
+        color: #95a6ca;
+        opacity: 0.9;
+        margin-bottom: 14px;
+      }
+
+      .date-section {
+        width: 100%;
+        margin: 0 0 14px;
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-orient: vertical;
+        -webkit-box-direction: normal;
+        -webkit-flex-direction: column;
+        flex-direction: column;
+        text-align: right;
+        -webkit-box-flex: initial;
+        -webkit-flex: initial;
+        flex: initial;
+        position: relative;
+        z-index: 1;
+        min-width: 0;
+      }
+
+      .weekday {
+        font-size: 86px;
+        font-weight: 600;
+        letter-spacing: 2px;
+        margin-bottom: 6px;
+        color: #f5f7ff;
+        -webkit-box-ordinal-group: 2;
+        -webkit-order: 1;
+        order: 1;
+      }
+
+      .weekday .date-static {
+        font-size: 0.68em;
+        margin-right: 8px;
+      }
+
+      .full-date {
+        font-size: 86px;
+        font-weight: 600;
+        line-height: 1.2;
+        color: #f5f7ff;
+        margin-bottom: 6px;
+        -webkit-box-ordinal-group: 1;
+        -webkit-order: 0;
+        order: 0;
+        white-space: nowrap;
+      }
+
+      .full-date .date-static {
+        font-size: 0.58em;
+        margin: 0 4px;
+        vertical-align: 0.08em;
+      }
+
+      .weekday .date-dynamic,
+      .full-date .date-dynamic {
+        display: inline-block;
+        vertical-align: baseline;
+        font-weight: 600;
+      }
+
+      /* Weather */
+      .weather-section {
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-orient: vertical;
+        -webkit-box-direction: normal;
+        -webkit-flex-direction: column;
+        flex-direction: column;
+        -webkit-box-align: end;
+        -webkit-align-items: flex-end;
+        align-items: flex-end;
+        -webkit-flex: 0 0 auto;
+        flex: 0 0 auto;
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        margin-left: 0;
+      }
+
+      .weather-main {
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-align: center;
+        -webkit-align-items: center;
+        align-items: center;
+        width: 100%;
+        -webkit-box-pack: end;
+        -webkit-justify-content: flex-end;
+        justify-content: flex-end;
+        margin-top: 8px;
+      }
+
+      .weather-icon {
+        line-height: 1;
+        margin-right: 18px;
+        font-size: 128px;
+        color: #eaf1ff;
+      }
+
+      .weather-temp {
+        font-size: 186px;
+        font-weight: 400;
+        letter-spacing: -2px;
+        color: #f5f7ff;
+      }
+
+      .weather-desc {
+        margin-top: 8px;
+        font-size: 68px;
+        font-weight: 500;
+        color: #f5f7ff;
+        opacity: 1;
+      }
+
+      .weather-details {
+        margin-top: 12px;
+        font-size: 60px;
+        color: #c6d2ef;
+        opacity: 0.95;
+        font-weight: 400;
+        white-space: nowrap;
+      }
+
+      .weather-details span + span {
+        margin-left: 20px;
+      }
+
+      .forecast {
+        position: relative;
+        z-index: 1;
+        width: 828px;
+        margin-top: 42px;
+        margin-right: -8px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0;
+        border-radius: 32px;
+        border: 1px solid rgba(158, 182, 237, 0.26);
+        background: rgba(26, 45, 92, 0.34);
+        -webkit-box-shadow: 0 8px 24px rgba(4, 10, 28, 0.22);
+        box-shadow: 0 8px 24px rgba(4, 10, 28, 0.22);
+        overflow: hidden;
+      }
+
+      .forecast-item {
+        height: 250px;
+        min-height: 250px;
+        padding: 22px 14px 20px;
+        border-radius: 0;
+        background: transparent;
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-orient: vertical;
+        -webkit-box-direction: normal;
+        -webkit-flex-direction: column;
+        flex-direction: column;
+        -webkit-box-pack: justify;
+        -webkit-justify-content: space-between;
+        justify-content: space-between;
+        -webkit-box-align: center;
+        -webkit-align-items: center;
+        align-items: center;
+        text-align: center;
+        border-left: 1px solid rgba(214, 226, 255, 0.2);
+      }
+
+      .forecast-item:first-child {
+        border-left: 0;
+      }
+
+      .forecast-day {
+        font-size: 42px;
+        font-weight: 400;
+        color: #c6d2ef;
+        opacity: 1;
+      }
+
+      .forecast-icon {
+        line-height: 1;
+        margin: 0;
+        font-size: 64px;
+        color: #eaf1ff;
+      }
+
+      .forecast-temp {
+        font-variant-numeric: tabular-nums;
+        font-size: 46px;
+        font-weight: 500;
+        color: #f5f7ff;
+        white-space: nowrap;
+      }
+
+      /* Loading */
+      .loading {
+        opacity: 0;
+        -webkit-animation: fadeIn 1s ease forwards;
+        animation: fadeIn 1s ease forwards;
+      }
+
+      @-webkit-keyframes fadeIn {
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes fadeIn {
+        to {
+          opacity: 1;
+        }
+      }
+
+      /* Error state */
+      .weather-error {
+        font-size: 32px;
+        opacity: 0.7;
+        font-weight: 300;
+      }
+
+      /* Divider */
+      .divider {
+        width: 40px;
+        height: 1px;
+        margin-bottom: 40px;
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      /* 底部 dock */
+      .bottom-dock {
+        position: absolute;
+        left: 62px;
+        right: 58px;
+        bottom: 38px;
+        height: 48px;
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: flex;
+        -webkit-box-align: center;
+        -webkit-align-items: center;
+        align-items: center;
+        -webkit-box-pack: start;
+        -webkit-justify-content: flex-start;
+        justify-content: flex-start;
+        z-index: 8;
+        color: #95a6ca;
+      }
+
+      .dock-center {
+        position: absolute;
+        left: 50%;
+        -webkit-transform: translateX(-50%);
+        transform: translateX(-50%);
+        font-size: 42px;
+        color: #c6d2ef;
+        letter-spacing: 1px;
+        white-space: nowrap;
+      }
+
+      .dock-center::before,
+      .dock-center::after {
+        content: "—";
+        color: #8ea2cb;
+        margin: 0 18px;
+      }
+    </style>
+  </head>
+  <body class="loading">
+    <div class="stage" id="stage">
+      <div class="container">
+        <div class="top-panel">
+          <div
+            class="top-panel-spacer top-panel-spacer--top"
+            aria-hidden="true"
+          ></div>
+          <div class="top-panel-stack">
+            <div class="time-section">
+              <div class="time" id="time">
+                <span class="time-part date-dynamic" id="timeH">--</span
+                ><span class="time-sep date-static">:</span
+                ><span class="time-part date-dynamic" id="timeM">--</span
+                ><span class="seconds date-dynamic" id="timeS">00</span>
+              </div>
+            </div>
+            <div class="pet-cat-block">
+              <div class="pet-cat-wrap" id="petCatLayer" aria-hidden="true">
+                <div class="pet-cat-inner" id="petCatInner">
+                  <pre class="pet-cat-art" id="petCatArt"></pre>
+                </div>
+              </div>
+              <div class="cat-speech" aria-live="polite">
+                <div class="greeting" id="greeting"></div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="top-panel-spacer top-panel-spacer--bottom"
+            aria-hidden="true"
+          ></div>
         </div>
-      </div>
-      <div class="pet-cat-block">
-        <div class="pet-cat-wrap" id="petCatLayer" aria-hidden="true">
-          <div class="pet-cat-inner" id="petCatInner">
-            <pre class="pet-cat-art" id="petCatArt"></pre>
+
+        <div class="bottom-panel">
+          <div class="weather-update-corner" id="weatherUpdateTime">
+            更新于：--:--
+          </div>
+          <div class="date-section">
+            <div class="weekday" id="weekdayRow">
+              <span class="date-static">星期</span
+              ><span class="date-dynamic" id="weekdayHanzi">日</span>
+            </div>
+            <div class="full-date" id="fullDate">
+              <span class="date-dynamic" id="dateYear">----</span
+              ><span class="date-static">年</span
+              ><span class="date-dynamic" id="dateMonth">--</span
+              ><span class="date-static">月</span
+              ><span class="date-dynamic" id="dateDay">--</span
+              ><span class="date-static">日</span>
+            </div>
+          </div>
+          <div class="weather-section" id="weatherSection">
+            <div class="weather-main">
+              <div class="weather-icon" id="weatherIcon">⏳</div>
+              <div class="weather-temp" id="weatherTemp">--°</div>
+            </div>
+            <div class="weather-desc" id="weatherDesc">加载中...</div>
+            <div class="weather-details" id="weatherDetails"></div>
+            <div class="forecast" id="forecast"></div>
           </div>
         </div>
-        <div class="cat-speech" aria-live="polite">
-          <div class="greeting" id="greeting"></div>
+
+        <div class="bottom-dock">
+          <div class="dock-center" id="dockCenterText"></div>
         </div>
       </div>
     </div>
-    <div class="top-panel-spacer top-panel-spacer--bottom" aria-hidden="true"></div>
-  </div>
 
-  <div class="bottom-panel">
-    <div class="weather-update-corner" id="weatherUpdateTime">更新于：--:--</div>
-    <div class="date-section">
-      <div class="weekday" id="weekdayRow">
-        <span class="date-static">星期</span><span class="date-dynamic" id="weekdayHanzi">日</span>
-      </div>
-      <div class="full-date" id="fullDate">
-        <span class="date-dynamic" id="dateYear">----</span><span class="date-static">年</span><span class="date-dynamic" id="dateMonth">--</span><span class="date-static">月</span><span class="date-dynamic" id="dateDay">--</span><span class="date-static">日</span>
-      </div>
-    </div>
-    <div class="weather-section" id="weatherSection">
-      <div class="weather-main">
-        <div class="weather-icon" id="weatherIcon">⏳</div>
-        <div class="weather-temp" id="weatherTemp">--°</div>
-      </div>
-      <div class="weather-desc" id="weatherDesc">加载中...</div>
-      <div class="weather-details" id="weatherDetails"></div>
-      <div class="forecast" id="forecast"></div>
-    </div>
-  </div>
+    <script>
+      (function () {
+        "use strict";
 
-  <div class="bottom-dock">
-    <div class="dock-center">生活明朗，万物可爱，未来值得期待。</div>
-  </div>
-</div>
-</div>
+        var LAT = 30.29;
+        var LNG = 120.16;
 
-<script>
-(function() {
-  'use strict';
+        var WEEKDAYS = [
+          "星期日",
+          "星期一",
+          "星期二",
+          "星期三",
+          "星期四",
+          "星期五",
+          "星期六",
+        ];
+        var WEEKDAY_HANZI = ["日", "一", "二", "三", "四", "五", "六"];
+        var FORECAST_DAY_NAMES = ["今天", "明天", "后天"];
+        var WEATHER_MAP = {
+          0: ["☀️", "晴"],
+          1: ["🌤️", "大部晴朗"],
+          2: ["⛅", "多云"],
+          3: ["☁️", "阴天"],
+          45: ["🌫️", "雾"],
+          48: ["🌫️", "雾凇"],
+          51: ["🌦️", "小毛毛雨"],
+          53: ["🌦️", "毛毛雨"],
+          55: ["🌦️", "大毛毛雨"],
+          56: ["🌧️", "冻毛毛雨"],
+          57: ["🌧️", "冻雨"],
+          61: ["🌧️", "小雨"],
+          63: ["🌧️", "中雨"],
+          65: ["🌧️", "大雨"],
+          66: ["🌧️", "冻雨"],
+          67: ["🌧️", "大冻雨"],
+          71: ["🌨️", "小雪"],
+          73: ["🌨️", "中雪"],
+          75: ["❄️", "大雪"],
+          77: ["🌨️", "雪粒"],
+          80: ["🌦️", "阵雨"],
+          81: ["🌧️", "中阵雨"],
+          82: ["⛈️", "大阵雨"],
+          85: ["🌨️", "阵雪"],
+          86: ["❄️", "大阵雪"],
+          95: ["⛈️", "雷暴"],
+          96: ["⛈️", "雷暴冰雹"],
+          99: ["⛈️", "强雷暴冰雹"],
+        };
 
-  var LAT = 30.29;
-  var LNG = 120.16;
+        var $timeH = document.getElementById("timeH");
+        var $timeM = document.getElementById("timeM");
+        var $timeS = document.getElementById("timeS");
+        var $weekdayHanzi = document.getElementById("weekdayHanzi");
+        var $dateYear = document.getElementById("dateYear");
+        var $dateMonth = document.getElementById("dateMonth");
+        var $dateDay = document.getElementById("dateDay");
+        var $greeting = document.getElementById("greeting");
+        var $weatherIcon = document.getElementById("weatherIcon");
+        var $weatherTemp = document.getElementById("weatherTemp");
+        var $weatherDesc = document.getElementById("weatherDesc");
+        var $weatherDetails = document.getElementById("weatherDetails");
+        var $forecast = document.getElementById("forecast");
+        var $weatherUpdateTime = document.getElementById("weatherUpdateTime");
+        var $dockCenter = document.getElementById("dockCenterText");
 
-  var WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-  var WEEKDAY_HANZI = ['日', '一', '二', '三', '四', '五', '六'];
-  var FORECAST_DAY_NAMES = ['今天', '明天', '后天'];
-  var WEATHER_MAP = {
-    0:  ['☀️', '晴'],       1:  ['🌤️', '大部晴朗'],  2:  ['⛅', '多云'],
-    3:  ['☁️', '阴天'],     45: ['🌫️', '雾'],         48: ['🌫️', '雾凇'],
-    51: ['🌦️', '小毛毛雨'], 53: ['🌦️', '毛毛雨'],     55: ['🌦️', '大毛毛雨'],
-    56: ['🌧️', '冻毛毛雨'], 57: ['🌧️', '冻雨'],       61: ['🌧️', '小雨'],
-    63: ['🌧️', '中雨'],     65: ['🌧️', '大雨'],       66: ['🌧️', '冻雨'],
-    67: ['🌧️', '大冻雨'],   71: ['🌨️', '小雪'],       73: ['🌨️', '中雪'],
-    75: ['❄️', '大雪'],     77: ['🌨️', '雪粒'],       80: ['🌦️', '阵雨'],
-    81: ['🌧️', '中阵雨'],   82: ['⛈️', '大阵雨'],     85: ['🌨️', '阵雪'],
-    86: ['❄️', '大阵雪'],   95: ['⛈️', '雷暴'],       96: ['⛈️', '雷暴冰雹'],
-    99: ['⛈️', '强雷暴冰雹'],
-  };
+        /** 底部 dock：接地气、好落实的短句，按本地日历日轮换 */
+        var DOCK_QUOTES = [
+          "能把今天过好，就挺好了。",
+          "累了就歇会儿，硬扛不值当。",
+          "按时吃饭睡觉，比啥鸡汤都管用。",
+          "不为难自己，事就少了半截。",
+          "一件一件来，急也没用。",
+          "吃点热的、喝点水，人容易缓过来。",
+          "今天搞不定，明天再搞，不丢人。",
+          "少刷点别人的光鲜，多顾顾自己的累。",
+          "平平常常的一天，也值得当回事。",
+          "卷不动了躺会儿，不犯法。",
+          "拖延的事，先做五分钟，往往就开了头。",
+          "烦的时候干点具体的：扫地、洗澡、出门走两步。",
+          "计划变了就改，别跟昨天较劲。",
+          "挣钱要紧，身体更要紧，别本末倒置。",
+          "话留三分，事别做绝，日后好相见。",
+          "高兴就高兴一会儿，难受也会过去。",
+          "睡饱了，脑子才转得动。",
+          "心里想什么，自己清楚就行，不用演给全世界看。",
+          "天气好不好，班还得上，饭还得吃。",
+          "能有人说两句话，心里会松快很多。",
+        ];
 
-  var $timeH = document.getElementById('timeH');
-  var $timeM = document.getElementById('timeM');
-  var $timeS = document.getElementById('timeS');
-  var $weekdayHanzi = document.getElementById('weekdayHanzi');
-  var $dateYear = document.getElementById('dateYear');
-  var $dateMonth = document.getElementById('dateMonth');
-  var $dateDay = document.getElementById('dateDay');
-  var $greeting = document.getElementById('greeting');
-  var $weatherIcon = document.getElementById('weatherIcon');
-  var $weatherTemp = document.getElementById('weatherTemp');
-  var $weatherDesc = document.getElementById('weatherDesc');
-  var $weatherDetails = document.getElementById('weatherDetails');
-  var $forecast = document.getElementById('forecast');
-  var $weatherUpdateTime = document.getElementById('weatherUpdateTime');
+        var lastDateStr = "";
+        var lastGreeting = "";
+        var lastSecTick = null;
+        var greetingCharCount = 0;
+        var clockPaused = false;
+        var lastH = "";
+        var lastM = "";
+        var lastS = "";
 
-  var lastDateStr = '';
-  var lastGreeting = '';
-  var lastSecTick = null;
-  var greetingCharCount = 0;
+        var $stage = document.getElementById("stage");
 
-  function prefersReducedMotion() {
-    try {
-      return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-    } catch (e) {
-      return false;
-    }
-  }
-
-  var $stage = document.getElementById('stage');
-
-  function updateStageScale() {
-    if (!$stage) return;
-    var w = window.innerWidth || document.documentElement.clientWidth || 0;
-    var h = window.innerHeight || document.documentElement.clientHeight || 0;
-    var sc = Math.min(w / 2048, h / 1536);
-    if (sc <= 0 || !isFinite(sc)) sc = 1;
-    var t = 'translate(-50%, -50%) scale(' + sc + ')';
-    $stage.style.webkitTransform = t;
-    $stage.style.transform = t;
-  }
-
-  function getGreeting(hour) {
-    if (hour < 6)  return '夜深了，早点休息';
-    if (hour < 9)  return '早安';
-    if (hour < 12) return '上午好';
-    if (hour < 14) return '中午好';
-    if (hour < 18) return '下午好';
-    if (hour < 22) return '晚上好';
-    return '夜深了，早点休息';
-  }
-
-  function renderGreetingText(text) {
-    if (!$greeting) return;
-    $greeting.setAttribute('aria-label', text);
-    if (prefersReducedMotion()) {
-      greetingCharCount = 0;
-      $greeting.textContent = text;
-      return;
-    }
-    greetingCharCount = text.length;
-    var frag = document.createDocumentFragment();
-    for (var i = 0; i < text.length; i++) {
-      var ch = text[i];
-      var span = document.createElement('span');
-      span.className = 'greeting-char';
-      span.style.setProperty('--i', String(i));
-      span.textContent = ch === ' ' ? '\u00a0' : ch;
-      frag.appendChild(span);
-    }
-    $greeting.textContent = '';
-    $greeting.appendChild(frag);
-  }
-
-  function scheduleClock() {
-    var now = Date.now();
-    var ms = now % 1000;
-    var delay = ms === 0 ? 1000 : 1000 - ms;
-    setTimeout(function() {
-      updateClock();
-      scheduleClock();
-    }, delay);
-  }
-
-  function updateClock() {
-    var now = new Date();
-    var h = String(now.getHours()).padStart(2, '0');
-    var m = String(now.getMinutes()).padStart(2, '0');
-    var s = String(now.getSeconds()).padStart(2, '0');
-
-    if ($timeH) $timeH.textContent = h;
-    if ($timeM) $timeM.textContent = m;
-    if ($timeS) $timeS.textContent = s;
-
-    if (lastSecTick !== s) {
-      if (lastSecTick !== null && typeof window.petCatOnSecondTick === 'function') {
-        window.petCatOnSecondTick();
-      }
-      lastSecTick = s;
-    }
-
-    var day = now.getDay();
-    var mo = now.getMonth() + 1;
-    var d = now.getDate();
-    var y = now.getFullYear();
-    var dateStr = y + '年' + mo + '月' + d + '日' + day;
-    if (dateStr !== lastDateStr) {
-      lastDateStr = dateStr;
-      if ($weekdayHanzi) $weekdayHanzi.textContent = WEEKDAY_HANZI[day];
-      if ($dateYear) $dateYear.textContent = String(y);
-      if ($dateMonth) $dateMonth.textContent = String(mo);
-      if ($dateDay) $dateDay.textContent = String(d);
-    }
-
-    var greeting = getGreeting(now.getHours());
-    if (greeting !== lastGreeting) {
-      lastGreeting = greeting;
-      renderGreetingText(greeting);
-    }
-  }
-
-  function updateWeatherTimeLabel() {
-    if (!$weatherUpdateTime) return;
-    var now = new Date();
-    var h = String(now.getHours()).padStart(2, '0');
-    var m = String(now.getMinutes()).padStart(2, '0');
-    $weatherUpdateTime.textContent = '更新于：' + h + ':' + m;
-  }
-
-  function fetchWeather() {
-    fetch(
-      'https://api.open-meteo.com/v1/forecast?latitude=' + LAT +
-      '&longitude=' + LNG +
-      '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m' +
-      '&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5'
-    ).then(function(resp) {
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      return resp.json();
-    }).then(function(data) {
-      var current = data.current;
-      var w = WEATHER_MAP[current.weather_code] || ['🌡️', '未知'];
-
-      $weatherIcon.textContent = w[0];
-      $weatherTemp.textContent = Math.round(current.temperature_2m) + '°';
-      $weatherDesc.textContent = w[1];
-      $weatherDetails.innerHTML =
-        '<span>体感 ' + Math.round(current.apparent_temperature) + '°</span>' +
-        '<span>湿度 ' + current.relative_humidity_2m + '%</span>' +
-        '<span>风速 ' + Math.round(current.wind_speed_10m) + ' km/h</span>';
-
-      var daily = data.daily;
-      var count = Math.min(4, daily.time.length);
-      var html = '';
-      for (var i = 1; i < count; i++) {
-        var fi = WEATHER_MAP[daily.weather_code[i]] || ['🌡️', '未知'];
-        var dayName = i < 3 ? FORECAST_DAY_NAMES[i] : WEEKDAYS[new Date(daily.time[i]).getDay()];
-        html += '<div class="forecast-item"><div class="forecast-day">' + dayName +
-          '</div><div class="forecast-icon">' + fi[0] +
-          '</div><div class="forecast-temp">' + Math.round(daily.temperature_2m_max[i]) +
-          '° / ' + Math.round(daily.temperature_2m_min[i]) + '°</div></div>';
-      }
-      $forecast.innerHTML = html;
-      updateWeatherTimeLabel();
-    }).catch(function(e) {
-      console.error('Weather fetch failed:', e);
-      $weatherDesc.textContent = '天气加载失败';
-      $weatherIcon.textContent = '⚠️';
-      $weatherTemp.textContent = '--°';
-      updateWeatherTimeLabel();
-    });
-  }
-
-  function getGeoLocation() {
-    return new Promise(function(resolve) {
-      if (!navigator.geolocation) { resolve(null); return; }
-      navigator.geolocation.getCurrentPosition(
-        function(pos) { resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }); },
-        function() { resolve(null); },
-        { timeout: 5000 }
-      );
-    });
-  }
-
-  /* 字符猫：setTimeout 调度；隐藏不跑；与 prefers-reduced-motion 对齐 */
-  function initPetCat() {
-    var elInner = document.getElementById('petCatInner');
-    var elArt = document.getElementById('petCatArt');
-    var elSpeech = document.querySelector('.cat-speech');
-    if (!elInner || !elArt) {
-      window.petCatOnSecondTick = function() {};
-      return;
-    }
-
-    var speechWaveTimer = null;
-
-    var FRAMES = {
-      open: '   /\\_/\\   \n  ( · · )  \n   u---u   ',
-      blink: '   /\\_/\\   \n  ( - - )  \n   u---u   ',
-      walkA: '   /\\_/\\   \n  ( · · )  \n _/     \\  ',
-      walkB: '   /\\_/\\   \n  ( · · )  \n  \\     \\_ '
-    };
-
-    var timeoutId = null;
-    var nudgeTimer = null;
-    var state = 'idle';
-    var blinkPhase = 0;
-    var walkStepsLeft = 0;
-    var walkDir = 1;
-    var walkFrame = 0;
-    var offsetPx = 0;
-    var nudgeY = 0;
-
-    var reducedMotionCache = prefersReducedMotion();
-
-    function pageHidden() {
-      if (document.visibilityState === 'hidden') return true;
-      if (typeof document.hidden !== 'undefined' && document.hidden) return true;
-      return false;
-    }
-
-    function applyTransform() {
-      elInner.style.webkitTransform = 'translate3d(' + offsetPx + 'px,' + nudgeY + 'px,0)';
-      elInner.style.transform = 'translate3d(' + offsetPx + 'px,' + nudgeY + 'px,0)';
-    }
-
-    function triggerGreetingWave() {
-      if (!elSpeech || reducedMotionCache) return;
-      if (speechWaveTimer) {
-        clearTimeout(speechWaveTimer);
-        speechWaveTimer = null;
-      }
-      var n = greetingCharCount > 0 ? greetingCharCount : 12;
-      var need = (n - 1) * 50 + 550 + 100;
-      elSpeech.classList.remove('cat-speech--wave');
-      void elSpeech.offsetWidth;
-      elSpeech.classList.add('cat-speech--wave');
-      speechWaveTimer = setTimeout(function() {
-        elSpeech.classList.remove('cat-speech--wave');
-        speechWaveTimer = null;
-      }, need);
-    }
-
-    function setArt(key) {
-      var next = FRAMES[key];
-      if (elArt.textContent !== next) {
-        elArt.textContent = next;
-      }
-    }
-
-    function randInt(min, max) {
-      return min + Math.floor(Math.random() * (max - min + 1));
-    }
-
-    function clearTimer() {
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-    }
-
-    function schedule(delay) {
-      clearTimer();
-      timeoutId = setTimeout(tick, delay);
-    }
-
-    function tick() {
-      timeoutId = null;
-      if (pageHidden()) {
-        return;
-      }
-
-      reducedMotionCache = prefersReducedMotion();
-
-      if (reducedMotionCache) {
-        if (elArt.textContent === FRAMES.blink) {
-          setArt('open');
-          schedule(6000 + randInt(0, 4000));
-          return;
+        function updateStageScale() {
+          if (!$stage) return;
+          var w =
+            window.innerWidth || document.documentElement.clientWidth || 0;
+          var h =
+            window.innerHeight || document.documentElement.clientHeight || 0;
+          var sc = Math.min(w / 2048, h / 1536);
+          if (sc <= 0 || !isFinite(sc)) sc = 1;
+          var t = "translate(-50%, -50%) scale(" + sc + ")";
+          $stage.style.webkitTransform = t;
+          $stage.style.transform = t;
         }
-        setArt('open');
-        offsetPx = 0;
-        applyTransform();
-        if (Math.random() < 0.22) {
-          setArt('blink');
-          schedule(160);
-          return;
-        }
-        schedule(6000 + randInt(0, 4000));
-        return;
-      }
 
-      if (state === 'idle') {
-        setArt('open');
-        var r = Math.random();
-        if (r < 0.2) {
-          state = 'blink';
-          blinkPhase = 0;
-          schedule(140);
-          return;
+        var GREETINGS = {
+          night: [
+            "夜深了，早点休息",
+            "呼噜呼噜……被窝在召唤，别和屏幕大眼瞪小眼啦。",
+            "月亮都睡了，你也该睡了",
+            "再熬下去，明天罐头的份儿可就归我了哦。",
+            "星星在守夜，你去休息",
+            "喵……这个点还不睡，是在等本喵巡夜吗？",
+            "夜色温柔，好梦相伴",
+            "本喵批准你关机——明天再当铲屎官。",
+            "晚安，明天会更好",
+            "月亮都挂成小鱼干了，快把眼睛闭上。",
+          ],
+          morning: [
+            "早安喵～太阳晒到尾巴尖了，该起床挣罐头啦",
+            "阳光正好，微风不燥",
+            "早起的猫有窗沿坐，早起的人有咖啡喝",
+            "早安，新的一天",
+            "早餐记得吃，不然本喵会担心你铲屎没力气",
+            "早起的你真棒",
+            "新的一天，许可证已盖章：允许可爱，允许摸鱼五分钟",
+            "早安，记得吃早餐",
+            "伸个懒腰先：今天也要温柔地对世界「喵」一声",
+            "元气满满的一天开始了",
+          ],
+          forenoon: [
+            "上午好，状态在线",
+            "这个时段适合「悄悄变强」，像猫爬架上一级一级往上蹭。",
+            "上午好～本喵盯梢中：专注模式，开！",
+            "上午好，效率拉满",
+            "喝口水，眨眨眼，效率就会自己跟过来。",
+            "上午好，干劲十足",
+            "干劲要像追红点一样，又准又执着喵。",
+            "上午好，专注的力量",
+            "今日 KPI：至少对自己温柔一次，本喵验收。",
+            "上午好，今日份的元气",
+          ],
+          noon: [
+            "中午喵！肚子叫了别硬扛，人类也要「加餐罐」的。",
+            "中午好，该吃饭了",
+            "干饭不积极，思想有问题——本喵说的。",
+            "午饭时间到",
+            "中午好，充充电",
+            "午饭时间到：允许大脑切换成「晒太阳模式」十分钟。",
+            "干饭人，干饭魂",
+            "吃饱了才有力气继续当优秀铲屎官。",
+            "中午好，休息一下",
+            "午休一下，下午才不会变成炸毛猫。",
+          ],
+          afternoon: [
+            "下午好，继续加油",
+            "下午好～困意像毛线球，滚开就好，别追着跑。",
+            "下午茶时间",
+            "节奏放慢半拍，像猫走路那样轻一点。",
+            "下午好，保持节奏",
+            "下午茶可以没有茶，但不能没有「喘口气」。",
+            "下午好，离下班又近了",
+            "离收工又近一爪，坚持住，小鱼干在终点招手。",
+            "下午好，活力不减",
+            "本喵远程投递：耐心 +1，烦躁 −1。",
+          ],
+          evening: [
+            "晚上好喵～辛苦了，今天的你已经很棒了。",
+            "晚上好，辛苦了",
+            "把「上班脸」卸下来，换成「蹭腿脸」。",
+            "晚上好，放松一下",
+            "夜晚是用来疗愈的，像舔毛一样慢慢来。",
+            "夜晚愉快",
+            "做点让自己呼噜的事吧，本喵盖章批准。",
+            "晚上好，享受时光",
+            "星光和台灯都亮着，选一盏陪你放松就好。",
+            "晚上好，做点喜欢的事",
+          ],
+          latenight: [
+            "夜深了……再刷下去，黑眼圈要比本喵的眼圈还圆了。",
+            "夜深了，早点休息",
+            "月亮上岗了，你也该把屏幕关进梦里。",
+            "月亮出来了，该休息了",
+            "今日份营业结束，明天再继续可爱。",
+            "今天辛苦了，早点睡",
+            "晚安喵：好梦里有罐头、暖窝和不会响的闹钟。",
+            "夜深了，明天继续",
+            "睡吧，本喵替你守第一班夜——骗你的，其实我也困了。",
+            "晚安，做个好梦",
+          ],
+        };
+
+        function getGreeting(hour, daySeed) {
+          var pool;
+          if (hour < 6) pool = GREETINGS.night;
+          else if (hour < 9) pool = GREETINGS.morning;
+          else if (hour < 12) pool = GREETINGS.forenoon;
+          else if (hour < 14) pool = GREETINGS.noon;
+          else if (hour < 18) pool = GREETINGS.afternoon;
+          else if (hour < 22) pool = GREETINGS.evening;
+          else pool = GREETINGS.latenight;
+          return pool[(hour + daySeed) % pool.length];
         }
-        if (r < 0.33) {
-          state = 'walk';
-          walkStepsLeft = randInt(4, 7);
-          walkDir = Math.random() < 0.5 ? -1 : 1;
-          walkFrame = 0;
-          offsetPx = 0;
+
+        function renderGreetingText(text) {
+          if (!$greeting) return;
+          $greeting.setAttribute("aria-label", text);
+          greetingCharCount = text.length;
+          var frag = document.createDocumentFragment();
+          for (var i = 0; i < text.length; i++) {
+            var ch = text[i];
+            var span = document.createElement("span");
+            span.className = "greeting-char";
+            span.style.setProperty("--i", String(i));
+            span.textContent = ch === " " ? "\u00a0" : ch;
+            frag.appendChild(span);
+          }
+          $greeting.textContent = "";
+          $greeting.appendChild(frag);
+        }
+
+        function scheduleClock() {
+          var now = Date.now();
+          var ms = now % 1000;
+          var delay = ms === 0 ? 1000 : 1000 - ms;
+          setTimeout(function () {
+            if (!clockPaused) updateClock();
+            scheduleClock();
+          }, delay);
+        }
+
+        function updateClock() {
+          var now = new Date();
+          var h = String(now.getHours()).padStart(2, "0");
+          var m = String(now.getMinutes()).padStart(2, "0");
+          var s = String(now.getSeconds()).padStart(2, "0");
+
+          if (h !== lastH) {
+            if ($timeH) $timeH.textContent = h;
+            lastH = h;
+          }
+          if (m !== lastM) {
+            if ($timeM) $timeM.textContent = m;
+            lastM = m;
+          }
+          if (s !== lastS) {
+            if ($timeS) $timeS.textContent = s;
+            lastS = s;
+          }
+
+          if (lastSecTick !== s) {
+            if (
+              lastSecTick !== null &&
+              typeof window.petCatOnSecondTick === "function"
+            ) {
+              window.petCatOnSecondTick();
+            }
+            lastSecTick = s;
+          }
+
+          var day = now.getDay();
+          var mo = now.getMonth() + 1;
+          var d = now.getDate();
+          var y = now.getFullYear();
+          var dateStr = y + "年" + mo + "月" + d + "日" + day;
+          if (dateStr !== lastDateStr) {
+            lastDateStr = dateStr;
+            if ($weekdayHanzi) $weekdayHanzi.textContent = WEEKDAY_HANZI[day];
+            if ($dateYear) $dateYear.textContent = String(y);
+            if ($dateMonth) $dateMonth.textContent = String(mo);
+            if ($dateDay) $dateDay.textContent = String(d);
+            if ($dockCenter) {
+              var localMidnight = new Date(y, mo - 1, d);
+              var dockIdx =
+                Math.floor(localMidnight.getTime() / 86400000) %
+                DOCK_QUOTES.length;
+              $dockCenter.textContent = DOCK_QUOTES[dockIdx];
+            }
+          }
+
+          var daySeed = Math.floor(now.getTime() / 86400000);
+          var greeting = getGreeting(now.getHours(), daySeed);
+          if (greeting !== lastGreeting) {
+            lastGreeting = greeting;
+            renderGreetingText(greeting);
+          }
+        }
+
+        function updateWeatherTimeLabel() {
+          if (!$weatherUpdateTime) return;
+          var now = new Date();
+          var h = String(now.getHours()).padStart(2, "0");
+          var m = String(now.getMinutes()).padStart(2, "0");
+          $weatherUpdateTime.textContent = "更新于：" + h + ":" + m;
+        }
+
+        function fetchWeather() {
+          fetch(
+            "https://api.open-meteo.com/v1/forecast?latitude=" +
+              LAT +
+              "&longitude=" +
+              LNG +
+              "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m" +
+              "&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5"
+          )
+            .then(function (resp) {
+              if (!resp.ok) throw new Error("HTTP " + resp.status);
+              return resp.json();
+            })
+            .then(function (data) {
+              var current = data.current;
+              var w = WEATHER_MAP[current.weather_code] || ["🌡️", "未知"];
+
+              $weatherIcon.textContent = w[0];
+              $weatherTemp.textContent =
+                Math.round(current.temperature_2m) + "°";
+              $weatherDesc.textContent =
+                w[1] +
+                " " +
+                Math.round(data.daily.temperature_2m_max[0]) +
+                "° / " +
+                Math.round(data.daily.temperature_2m_min[0]) +
+                "°";
+              $weatherDetails.innerHTML =
+                "<span>体感 " +
+                Math.round(current.apparent_temperature) +
+                "°</span>" +
+                "<span>湿度 " +
+                current.relative_humidity_2m +
+                "%</span>" +
+                "<span>风速 " +
+                Math.round(current.wind_speed_10m) +
+                " km/h</span>";
+
+              var daily = data.daily;
+              var count = Math.min(4, daily.time.length);
+              var html = "";
+              for (var i = 1; i < count; i++) {
+                var fi = WEATHER_MAP[daily.weather_code[i]] || ["🌡️", "未知"];
+                var dayName =
+                  i < 3
+                    ? FORECAST_DAY_NAMES[i]
+                    : WEEKDAYS[new Date(daily.time[i]).getDay()];
+                html +=
+                  '<div class="forecast-item"><div class="forecast-day">' +
+                  dayName +
+                  '</div><div class="forecast-icon">' +
+                  fi[0] +
+                  '</div><div class="forecast-temp">' +
+                  Math.round(daily.temperature_2m_max[i]) +
+                  "° / " +
+                  Math.round(daily.temperature_2m_min[i]) +
+                  "°</div></div>";
+              }
+              $forecast.innerHTML = html;
+              updateWeatherTimeLabel();
+            })
+            .catch(function (e) {
+              console.error("Weather fetch failed:", e);
+              $weatherDesc.textContent = "天气加载失败";
+              $weatherIcon.textContent = "⚠️";
+              $weatherTemp.textContent = "--°";
+              updateWeatherTimeLabel();
+            });
+        }
+
+        function getGeoLocation() {
+          return new Promise(function (resolve) {
+            if (!navigator.geolocation) {
+              resolve(null);
+              return;
+            }
+            navigator.geolocation.getCurrentPosition(
+              function (pos) {
+                resolve({
+                  lat: pos.coords.latitude,
+                  lng: pos.coords.longitude,
+                });
+              },
+              function () {
+                resolve(null);
+              },
+              { timeout: 5000 }
+            );
+          });
+        }
+
+        /* 字符猫：setTimeout 调度；页面不可见时暂停 */
+        function initPetCat() {
+          var elInner = document.getElementById("petCatInner");
+          var elArt = document.getElementById("petCatArt");
+          var elSpeech = document.querySelector(".cat-speech");
+          if (!elInner || !elArt) {
+            window.petCatOnSecondTick = function () {};
+            return;
+          }
+
+          var speechWaveTimer = null;
+
+          var FRAMES = {
+            open: "   /\\_/\\   \n  ( · · )  \n   u---u   ",
+            blink: "   /\\_/\\   \n  ( - - )  \n   u---u   ",
+            walkA: "   /\\_/\\   \n  ( · · )  \n _/     \\  ",
+            walkB: "   /\\_/\\   \n  ( · · )  \n  \\     \\_ ",
+          };
+
+          var timeoutId = null;
+          var nudgeTimer = null;
+          var state = "idle";
+          var blinkPhase = 0;
+          var walkStepsLeft = 0;
+          var walkDir = 1;
+          var walkFrame = 0;
+          var offsetPx = 0;
+          var nudgeY = 0;
+
+          function pageHidden() {
+            if (document.visibilityState === "hidden") return true;
+            if (typeof document.hidden !== "undefined" && document.hidden)
+              return true;
+            return false;
+          }
+
+          function applyTransform() {
+            elInner.style.webkitTransform =
+              "translate3d(" + offsetPx + "px," + nudgeY + "px,0)";
+            elInner.style.transform =
+              "translate3d(" + offsetPx + "px," + nudgeY + "px,0)";
+          }
+
+          function triggerGreetingWave() {
+            if (!elSpeech) return;
+            if (speechWaveTimer) {
+              clearTimeout(speechWaveTimer);
+              speechWaveTimer = null;
+            }
+            var n = greetingCharCount > 0 ? greetingCharCount : 12;
+            var need = (n - 1) * 50 + 550 + 100;
+            elSpeech.classList.remove("cat-speech--wave");
+            void elSpeech.offsetWidth;
+            elSpeech.classList.add("cat-speech--wave");
+            speechWaveTimer = setTimeout(function () {
+              elSpeech.classList.remove("cat-speech--wave");
+              speechWaveTimer = null;
+            }, need);
+          }
+
+          function setArt(key) {
+            var next = FRAMES[key];
+            if (elArt.textContent !== next) {
+              elArt.textContent = next;
+            }
+          }
+
+          function randInt(min, max) {
+            return min + Math.floor(Math.random() * (max - min + 1));
+          }
+
+          function clearTimer() {
+            if (timeoutId !== null) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+          }
+
+          function schedule(delay) {
+            clearTimer();
+            timeoutId = setTimeout(tick, delay);
+          }
+
+          function tick() {
+            timeoutId = null;
+            if (pageHidden()) {
+              return;
+            }
+
+            if (state === "idle") {
+              setArt("open");
+              var r = Math.random();
+              if (r < 0.2) {
+                state = "blink";
+                blinkPhase = 0;
+                schedule(140);
+                return;
+              }
+              if (r < 0.33) {
+                state = "walk";
+                walkStepsLeft = randInt(4, 7);
+                walkDir = Math.random() < 0.5 ? -1 : 1;
+                walkFrame = 0;
+                offsetPx = 0;
+                applyTransform();
+                schedule(400);
+                return;
+              }
+              schedule(randInt(1200, 2200));
+              return;
+            }
+
+            if (state === "blink") {
+              if (blinkPhase === 0) {
+                setArt("blink");
+                triggerGreetingWave();
+                blinkPhase = 1;
+                schedule(150);
+              } else {
+                setArt("open");
+                state = "idle";
+                schedule(randInt(800, 1600));
+              }
+              return;
+            }
+
+            if (state === "walk") {
+              setArt(walkFrame % 2 === 0 ? "walkA" : "walkB");
+              walkFrame++;
+              offsetPx += walkDir * 6;
+              if (offsetPx > 20) offsetPx = 20;
+              if (offsetPx < -20) offsetPx = -20;
+              applyTransform();
+              if (walkFrame === 1) {
+                triggerGreetingWave();
+              }
+              walkStepsLeft--;
+              if (walkStepsLeft <= 0) {
+                state = "idle";
+                offsetPx = 0;
+                applyTransform();
+                setArt("open");
+                schedule(randInt(1000, 2000));
+                return;
+              }
+              schedule(420);
+              return;
+            }
+
+            state = "idle";
+            schedule(1500);
+          }
+
+          var nudgeCounter = 0;
+          window.petCatOnSecondTick = function () {
+            if (pageHidden()) return;
+            if (state !== "idle") return;
+            nudgeCounter++;
+            if (nudgeCounter % 3 !== 0) return;
+            if (nudgeTimer) {
+              clearTimeout(nudgeTimer);
+              nudgeTimer = null;
+            }
+            nudgeY = -14;
+            applyTransform();
+            nudgeTimer = setTimeout(function () {
+              nudgeTimer = null;
+              nudgeY = 0;
+              applyTransform();
+            }, 130);
+          };
+
+          document.addEventListener("visibilitychange", function () {
+            clearTimer();
+            if (speechWaveTimer) {
+              clearTimeout(speechWaveTimer);
+              speechWaveTimer = null;
+            }
+            if (elSpeech) {
+              elSpeech.classList.remove("cat-speech--wave");
+            }
+            if (nudgeTimer) {
+              clearTimeout(nudgeTimer);
+              nudgeTimer = null;
+            }
+            nudgeY = 0;
+            applyTransform();
+            if (!pageHidden()) {
+              schedule(80);
+            }
+          });
+
+          setArt("open");
           applyTransform();
           schedule(400);
-          return;
         }
-        schedule(randInt(1200, 2200));
-        return;
-      }
 
-      if (state === 'blink') {
-        if (blinkPhase === 0) {
-          setArt('blink');
-          triggerGreetingWave();
-          blinkPhase = 1;
-          schedule(150);
-        } else {
-          setArt('open');
-          state = 'idle';
-          schedule(randInt(800, 1600));
-        }
-        return;
-      }
+        updateStageScale();
+        window.addEventListener("resize", updateStageScale);
+        updateClock();
+        scheduleClock();
+        initPetCat();
 
-      if (state === 'walk') {
-        setArt(walkFrame % 2 === 0 ? 'walkA' : 'walkB');
-        walkFrame++;
-        offsetPx += walkDir * 6;
-        if (offsetPx > 20) offsetPx = 20;
-        if (offsetPx < -20) offsetPx = -20;
-        applyTransform();
-        if (walkFrame === 1) {
-          triggerGreetingWave();
-        }
-        walkStepsLeft--;
-        if (walkStepsLeft <= 0) {
-          state = 'idle';
-          offsetPx = 0;
-          applyTransform();
-          setArt('open');
-          schedule(randInt(1000, 2000));
-          return;
-        }
-        schedule(420);
-        return;
-      }
+        /* 页面不可见时暂停时钟更新，减少 GPU/CPU 开销 */
+        document.addEventListener("visibilitychange", function () {
+          clockPaused = !!document.hidden;
+          if (!clockPaused) updateClock();
+        });
 
-      state = 'idle';
-      schedule(1500);
-    }
-
-    window.petCatOnSecondTick = function() {
-      if (pageHidden()) return;
-      if (prefersReducedMotion()) return;
-      if (state !== 'idle') return;
-      if (nudgeTimer) {
-        clearTimeout(nudgeTimer);
-        nudgeTimer = null;
-      }
-      nudgeY = -14;
-      applyTransform();
-      nudgeTimer = setTimeout(function() {
-        nudgeTimer = null;
-        nudgeY = 0;
-        applyTransform();
-      }, 130);
-    };
-
-    document.addEventListener('visibilitychange', function() {
-      clearTimer();
-      if (speechWaveTimer) {
-        clearTimeout(speechWaveTimer);
-        speechWaveTimer = null;
-      }
-      if (elSpeech) {
-        elSpeech.classList.remove('cat-speech--wave');
-      }
-      if (nudgeTimer) {
-        clearTimeout(nudgeTimer);
-        nudgeTimer = null;
-      }
-      nudgeY = 0;
-      applyTransform();
-      if (!pageHidden()) {
-        schedule(80);
-      }
-    });
-
-    if (window.matchMedia) {
-      try {
-        var mql = window.matchMedia('(prefers-reduced-motion: reduce)');
-        var onMq = function() {
-          reducedMotionCache = prefersReducedMotion();
-          if (lastGreeting) renderGreetingText(lastGreeting);
-          clearTimer();
-          schedule(50);
-        };
-        if (mql.addEventListener) {
-          mql.addEventListener('change', onMq);
-        } else if (mql.addListener) {
-          mql.addListener(onMq);
-        }
-      } catch (e) {}
-    }
-
-    setArt('open');
-    applyTransform();
-    schedule(400);
-  }
-
-  updateStageScale();
-  window.addEventListener('resize', updateStageScale);
-  updateClock();
-  scheduleClock();
-  initPetCat();
-
-  getGeoLocation().then(function(geo) {
-    if (geo) { LAT = geo.lat; LNG = geo.lng; }
-    fetchWeather();
-    setInterval(fetchWeather, 600000);
-  });
-})();
-</script>
-
-</body>
+        getGeoLocation().then(function (geo) {
+          if (geo) {
+            LAT = geo.lat;
+            LNG = geo.lng;
+          }
+          fetchWeather();
+          setInterval(fetchWeather, 1200000);
+        });
+      })();
+    </script>
+  </body>
 </html>
