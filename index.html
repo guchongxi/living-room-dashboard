@@ -13,8 +13,11 @@
     />
     <meta name="apple-mobile-web-app-title" content="客厅时钟" />
     <meta name="format-detection" content="telephone=no" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>客厅时钟</title>
-    <link rel="manifest" href="manifest.json" />
+    <link rel="manifest" href="manifest.json?v=2" />
     <link rel="apple-touch-icon" href="icon-192.png" />
     <link rel="icon" type="image/png" href="icon-192.png" />
     <style>
@@ -654,11 +657,41 @@
       .dock-center::after {
         content: "—";
         color: #8ea2cb;
-        margin: 0 18px;
+      }
+
+      /* 休眠遮罩 */
+      .sleep-overlay {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 1.5s ease;
+        z-index: 100;
+        border-radius: inherit;
+      }
+      .sleep-overlay.active {
+        opacity: 0.85;
+        pointer-events: auto;
+      }
+      .sleep-overlay-text {
+        color: #fff;
+        font-size: 48px;
+        font-weight: 300;
+        letter-spacing: 0.15em;
+        opacity: 0.5;
+        user-select: none;
       }
     </style>
   </head>
   <body class="loading">
+
     <div class="stage" id="stage">
       <div class="container">
         <div class="top-panel">
@@ -724,6 +757,10 @@
         <div class="bottom-dock">
           <div class="dock-center" id="dockCenterText"></div>
         </div>
+      </div>
+      <!-- 休眠遮罩 -->
+      <div class="sleep-overlay" id="sleepOverlay">
+        <div class="sleep-overlay-text">屏幕休眠中</div>
       </div>
     </div>
 
@@ -821,6 +858,43 @@
         var lastSecTick = null;
         var greetingCharCount = 0;
         var clockPaused = false;
+
+        /* 省电休眠：凌晨 01:00 ~ 07:30 停止所有动态内容 */
+        var SLEEP_START_H = 1, SLEEP_START_M = 0;
+        var SLEEP_END_H = 7, SLEEP_END_M = 30;
+        var sleepMode = false;
+        var $sleepOverlay = document.getElementById("sleepOverlay");
+        var sleepWakeTimer = null;
+
+        function isSleepTime() {
+          var now = new Date();
+          var h = now.getHours(), m = now.getMinutes();
+          var cur = h * 60 + m;
+          var start = SLEEP_START_H * 60 + SLEEP_START_M;
+          var end = SLEEP_END_H * 60 + SLEEP_END_M;
+          if (start <= end) return cur >= start && cur < end;
+          return cur >= start || cur < end;
+        }
+
+        function updateSleepMode() {
+          var sleeping = isSleepTime();
+          if (sleeping === sleepMode) return;
+          sleepMode = sleeping;
+          if (sleepMode) {
+            $sleepOverlay.classList.add("active");
+            clockPaused = true;
+            if (sleepWakeTimer) clearTimeout(sleepWakeTimer);
+            /* 每分钟检查一次是否该唤醒 */
+            sleepWakeTimer = setInterval(function () {
+              if (!isSleepTime()) updateSleepMode();
+            }, 60000);
+          } else {
+            $sleepOverlay.classList.remove("active");
+            clockPaused = false;
+            if (sleepWakeTimer) { clearInterval(sleepWakeTimer); sleepWakeTimer = null; }
+            updateClock();
+          }
+        }
         var lastH = "";
         var lastM = "";
         var lastS = "";
@@ -961,6 +1035,7 @@
           var ms = now % 1000;
           var delay = ms === 0 ? 1000 : 1000 - ms;
           setTimeout(function () {
+            updateSleepMode();
             if (!clockPaused) updateClock();
             scheduleClock();
           }, delay);
@@ -1107,14 +1182,28 @@
               resolve(null);
               return;
             }
+            /* iOS standalone 模式下定位弹窗不显示会导致回调永不触发，
+               因此用 setTimeout 兜底，确保始终 resolve */
+            var timer = setTimeout(function () {
+              timer = null;
+              resolve(null);
+            }, 5000);
             navigator.geolocation.getCurrentPosition(
               function (pos) {
+                if (timer !== null) {
+                  clearTimeout(timer);
+                  timer = null;
+                }
                 resolve({
                   lat: pos.coords.latitude,
                   lng: pos.coords.longitude,
                 });
               },
               function () {
+                if (timer !== null) {
+                  clearTimeout(timer);
+                  timer = null;
+                }
                 resolve(null);
               },
               { timeout: 5000 }
@@ -1155,6 +1244,7 @@
             if (document.visibilityState === "hidden") return true;
             if (typeof document.hidden !== "undefined" && document.hidden)
               return true;
+            if (sleepMode) return true;
             return false;
           }
 
@@ -1321,14 +1411,20 @@
 
         updateStageScale();
         window.addEventListener("resize", updateStageScale);
+        updateSleepMode();
         updateClock();
         scheduleClock();
         initPetCat();
 
-        /* 页面不可见时暂停时钟更新，减少 GPU/CPU 开销 */
+        /* 页面不可见或休眠时暂停更新 */
         document.addEventListener("visibilitychange", function () {
-          clockPaused = !!document.hidden;
-          if (!clockPaused) updateClock();
+          if (document.hidden) {
+            clockPaused = true;
+          } else {
+            updateSleepMode();
+            clockPaused = false;
+            updateClock();
+          }
         });
 
         getGeoLocation().then(function (geo) {
