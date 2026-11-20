@@ -29,10 +29,10 @@ rsync -a --delete ~/work/github/living-room-dashboard/ /var/www/living-room-dash
 
 ### HTTPS
 
-- 站点同时提供 HTTPS:`https://114.55.208.51/`(80 端口 301 跳转到 HTTPS)
-- 证书:ZeroSSL 免费 IP 证书(90 天有效期),文件在 `/etc/nginx/ssl/dashboard/`(`fullchain.pem` / `privkey.pem`)
-- 自动续期:root crontab 每日 09:17 执行 `/usr/local/bin/renew-zerossl-cert.sh`,剩余有效期 >30 天时跳过,否则自动走 ZeroSSL API 重新签发并 reload nginx;日志在 `/var/log/zerossl-renew.log`
-- nginx 80 块中的 `/.well-known/pki-validation/` 是证书 HTTP 文件验证路径,**不要删除**,否则续期会失败
+- 访问入口:`https://114.55.208.51/` 与 `https://gucx.top/`(域名已备案,浙ICP备2026030754号-1);80 端口 301 跳转到 HTTPS
+- IP 证书:ZeroSSL 免费 IP 证书(90 天有效期),文件在 `/etc/nginx/ssl/dashboard/`(`fullchain.pem` / `privkey.pem`);root crontab 每日 09:17 执行 `/usr/local/bin/renew-zerossl-cert.sh` 自动续期(剩余有效期 >30 天时跳过),日志在 `/var/log/zerossl-renew.log`
+- 域名证书:Let's Encrypt(`CN=gucx.top`),文件在 `/etc/letsencrypt/live/gucx.top/`,nginx 有独立 443 块按 SNI 匹配 `gucx.top`(IP 证书块为默认);certbot 装在 `/opt/certbot-venv`,root crontab 每日 03:42 执行 `certbot renew --quiet`,日志在 `/var/log/certbot-renew.log`
+- nginx 80 块中的 `/.well-known/pki-validation/`(ZeroSSL 验证)与 `/.well-known/acme-challenge/`(Let's Encrypt 验证)是证书验证路径,**不要删除**,否则续期会失败
 
 ## 架构要点
 
