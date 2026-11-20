@@ -18,6 +18,15 @@ python3 -m http.server 8080
 
 无测试、无 lint、无构建步骤。
 
+## 部署
+
+- 对外服务走副本:nginx 站点根为 `/var/www/living-room-dashboard`(admin 可写)。本家目录为 700,nginx 无法直接读仓库目录,**不要让 nginx 直指本仓库目录**
+- 改动后同步副本即对外生效,无需 reload nginx:
+
+```bash
+rsync -a --delete ~/work/github/living-room-dashboard/ /var/www/living-room-dashboard/
+```
+
 ## 架构要点
 
 ### 逻辑画布
