@@ -27,6 +27,13 @@ python3 -m http.server 8080
 rsync -a --delete ~/work/github/living-room-dashboard/ /var/www/living-room-dashboard/
 ```
 
+### HTTPS
+
+- 站点同时提供 HTTPS:`https://114.55.208.51/`(80 端口 301 跳转到 HTTPS)
+- 证书:ZeroSSL 免费 IP 证书(90 天有效期),文件在 `/etc/nginx/ssl/dashboard/`(`fullchain.pem` / `privkey.pem`)
+- 自动续期:root crontab 每日 09:17 执行 `/usr/local/bin/renew-zerossl-cert.sh`,剩余有效期 >30 天时跳过,否则自动走 ZeroSSL API 重新签发并 reload nginx;日志在 `/var/log/zerossl-renew.log`
+- nginx 80 块中的 `/.well-known/pki-validation/` 是证书 HTTP 文件验证路径,**不要删除**,否则续期会失败
+
 ## 架构要点
 
 ### 逻辑画布
